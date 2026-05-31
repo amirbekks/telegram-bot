@@ -11,10 +11,8 @@ from aiogram.client.default import DefaultBotProperties
 import os
 from dotenv import load_dotenv
 
-# Загружаем секреты из файла .env
 load_dotenv()
 
-# Переменные окружения
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
@@ -22,7 +20,6 @@ WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
 # ========== КЛАВИАТУРЫ ==========
 
 def main_menu():
-    """Главное меню бота"""
     buttons = [
         [KeyboardButton(text="💵 Курсы валют")],
         [KeyboardButton(text="🌦 Погода")],
@@ -32,45 +29,113 @@ def main_menu():
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 def currency_menu():
-    """Меню конвертации валют"""
     buttons = [
         [KeyboardButton(text="🇺🇸 USD → KZT"), KeyboardButton(text="🇪🇺 EUR → KZT")],
         [KeyboardButton(text="🇷🇺 RUB → KZT"), KeyboardButton(text="🇨🇳 CNY → KZT")],
-        [KeyboardButton(text="🔄 Все курсы"), KeyboardButton(text="💱 Конвертировать вручную")],
-        [KeyboardButton(text="🔙 Назад в меню")]
+        [KeyboardButton(text="🔄 Другие валюты"), KeyboardButton(text="🔙 Назад в меню")]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
-def weather_menu():
-    """Меню выбора города для погоды"""
+def other_currencies_menu():
     buttons = [
-        [KeyboardButton(text="🌆 Астана"), KeyboardButton(text="🌉 Алматы")],
-        [KeyboardButton(text="🏞 Бурабай")],
-        [KeyboardButton(text="🔙 Назад в меню")]
+        [KeyboardButton(text="🇬🇧 GBP → KZT"), KeyboardButton(text="🇹🇷 TRY → KZT")],
+        [KeyboardButton(text="🇰🇬 KGS → KZT"), KeyboardButton(text="🇯🇵 JPY → KZT")],
+        [KeyboardButton(text="🇨🇦 CAD → KZT"), KeyboardButton(text="🇦🇺 AUD → KZT")],
+        [KeyboardButton(text="🔙 Назад к валютам")]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
-def admin_menu():
-    """Админ меню"""
+def countries_menu():
     buttons = [
-        [KeyboardButton(text="📊 Статистика")],
-        [KeyboardButton(text="💡 Последние идеи")],
-        [KeyboardButton(text="📢 Сделать рассылку")],
+        [KeyboardButton(text="🇰🇿 Казахстан"), KeyboardButton(text="🇨🇳 Китай")],
+        [KeyboardButton(text="🇰🇬 Кыргызстан"), KeyboardButton(text="🇹🇭 Таиланд")],
+        [KeyboardButton(text="🇹🇷 Турция"), KeyboardButton(text="🇦🇪 ОАЭ")],
+        [KeyboardButton(text="🇪🇬 Египет"), KeyboardButton(text="🇮🇳 Индия")],
         [KeyboardButton(text="🔙 Назад в меню")]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
-# ========== СОСТОЯНИЯ ДЛЯ FSM ==========
+# Города по странам
+CITIES_BY_COUNTRY = {
+    "🇰🇿 Казахстан": {
+        "Астана": (51.1694, 71.4491),
+        "Алматы": (43.2565, 76.9286),
+        "Бурабай": (53.0853, 70.3169),
+        "Шымкент": (42.3417, 69.5901),
+        "Актау": (43.6532, 51.1552),
+        "Атырау": (47.1167, 51.8833),
+        "Караганда": (49.8014, 73.1021),
+        "Уральск": (51.2167, 51.3667)
+    },
+    "🇨🇳 Китай": {
+        "Пекин": (39.9042, 116.4074),
+        "Шанхай": (31.2304, 121.4737),
+        "Гуанчжоу": (23.1291, 113.2644),
+        "Шэньчжэнь": (22.5431, 114.0579),
+        "Сиань": (34.3416, 108.9402)
+    },
+    "🇰🇬 Кыргызстан": {
+        "Бишкек": (42.8746, 74.5698),
+        "Ош": (40.5149, 72.8166),
+        "Иссык-Куль": (42.4414, 76.8286),
+        "Джалал-Абад": (40.9334, 73.0027)
+    },
+    "🇹🇭 Таиланд": {
+        "Бангкок": (13.7367, 100.5231),
+        "Пхукет": (7.8804, 98.3923),
+        "Паттайя": (12.9236, 100.8825),
+        "Чиангмай": (18.7883, 98.9853),
+        "Краби": (8.0863, 98.9069)
+    },
+    "🇹🇷 Турция": {
+        "Стамбул": (41.0082, 28.9784),
+        "Анкара": (39.9334, 32.8597),
+        "Анталья": (36.8969, 30.7133),
+        "Измир": (38.4192, 27.1287),
+        "Бодрум": (37.0344, 27.4305),
+        "Каппадокия": (38.6435, 34.8289)
+    },
+    "🇦🇪 ОАЭ": {
+        "Дубай": (25.2048, 55.2708),
+        "Абу-Даби": (24.4539, 54.3773),
+        "Шарджа": (25.3463, 55.4209)
+    },
+    "🇪🇬 Египет": {
+        "Каир": (30.0444, 31.2357),
+        "Хургада": (27.2574, 33.8128),
+        "Шарм-эль-Шейх": (27.9158, 34.33)
+    },
+    "🇮🇳 Индия": {
+        "Дели": (28.6139, 77.2090),
+        "Гоа": (15.2993, 74.1240),
+        "Мумбаи": (19.0760, 72.8777)
+    }
+}
+
+# Валюты для конвертации (код, название, эмодзи)
+CURRENCIES = {
+    "USD": {"name": "Доллар США", "emoji": "🇺🇸"},
+    "EUR": {"name": "Евро", "emoji": "🇪🇺"},
+    "RUB": {"name": "Российский рубль", "emoji": "🇷🇺"},
+    "CNY": {"name": "Китайский юань", "emoji": "🇨🇳"},
+    "GBP": {"name": "Фунт стерлингов", "emoji": "🇬🇧"},
+    "TRY": {"name": "Турецкая лира", "emoji": "🇹🇷"},
+    "KGS": {"name": "Кыргызский сом", "emoji": "🇰🇬"},
+    "JPY": {"name": "Японская иена", "emoji": "🇯🇵"},
+    "CAD": {"name": "Канадский доллар", "emoji": "🇨🇦"},
+    "AUD": {"name": "Австралийский доллар", "emoji": "🇦🇺"}
+}
+
+# Состояния
+class ConvertState(StatesGroup):
+    waiting_for_amount = State()
+    waiting_for_currency = State()
 
 class IdeaState(StatesGroup):
     waiting_for_idea = State()
 
 class BroadcastState(StatesGroup):
     waiting_for_message = State()
-
-class ConvertState(StatesGroup):
-    waiting_for_currency = State()
-    waiting_for_amount = State()
 
 # ========== БАЗА ДАННЫХ ==========
 
@@ -142,8 +207,7 @@ async def get_currency_rates():
                 if response.status == 200:
                     text = await response.text()
                     rates = {}
-                    currencies = ['USD', 'EUR', 'RUB', 'CNY']
-                    for currency in currencies:
+                    for currency in CURRENCIES.keys():
                         search_text = f'id="{currency}"'
                         if search_text in text:
                             start = text.find(search_text) + len(search_text) + 2
@@ -158,23 +222,17 @@ async def get_currency_rates():
     except Exception as e:
         print(f"Ошибка получения курсов: {e}")
     
-    # Тестовые данные если API не работает
-    return {'USD': 464.50, 'EUR': 505.80, 'RUB': 5.12, 'CNY': 64.80}
+    # Тестовые данные
+    return {
+        'USD': 464.50, 'EUR': 505.80, 'RUB': 5.12, 'CNY': 64.80,
+        'GBP': 590.00, 'TRY': 14.50, 'KGS': 5.20, 'JPY': 3.10,
+        'CAD': 340.00, 'AUD': 310.00
+    }
 
 # ========== ПОГОДА ==========
 
-async def get_weather(city_name: str):
-    cities = {
-        'Астана': {'lat': 51.1694, 'lon': 71.4491},
-        'Алматы': {'lat': 43.2565, 'lon': 76.9286},
-        'Бурабай': {'lat': 53.0853, 'lon': 70.3169}
-    }
-    
-    if city_name not in cities:
-        return None
-    
-    coords = cities[city_name]
-    url = f"http://api.openweathermap.org/data/2.5/weather?lat={coords['lat']}&lon={coords['lon']}&appid={WEATHER_API_KEY}&units=metric&lang=ru"
+async def get_weather(city_name: str, lat: float, lon: float):
+    url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=ru"
     
     try:
         async with aiohttp.ClientSession() as session:
@@ -212,7 +270,154 @@ async def get_weather(city_name: str):
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 
-# ========== ГЛАВНОЕ МЕНЮ ==========
+# ========== КОНВЕРТАЦИЯ (БЕЗ КНОПКИ ОТПРАВКИ) ==========
+
+@dp.message(F.text.startswith("💰 "))
+async def convert_from_message(message: types.Message):
+    """Автоматическая конвертация из сообщения пользователя"""
+    try:
+        parts = message.text.split()
+        if len(parts) == 3:
+            amount = float(parts[1])
+            currency = parts[2].upper()
+            
+            rates = await get_currency_rates()
+            
+            if currency in rates and currency in CURRENCIES:
+                result = amount * rates[currency]
+                await message.answer(
+                    f"💱 <b>{amount:,.2f} {currency}</b> = <b>{result:,.2f} ₸</b>\n"
+                    f"📊 Курс: 1 {currency} = {rates[currency]:.2f} ₸",
+                    parse_mode="HTML"
+                )
+            else:
+                await message.answer(f"❌ Валюта {currency} не поддерживается.\nДоступны: USD, EUR, RUB, CNY, GBP, TRY, KGS, JPY, CAD, AUD")
+    except:
+        pass
+
+@dp.callback_query(F.data.startswith("conv_"))
+async def convert_currency(callback: types.CallbackQuery, state: FSMContext):
+    currency = callback.data.split("_")[1]
+    await state.update_data(currency=currency)
+    await state.set_state(ConvertState.waiting_for_amount)
+    await callback.message.answer(
+        f"💱 <b>Конвертация {CURRENCIES[currency]['emoji']} {currency} → KZT</b>\n\n"
+        f"Просто <b>напишите сумму</b> цифрами (например: 100, 500.50)\n\n"
+        f"<i>Сообщение будет автоматически переведено в тенге</i>",
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@dp.message(ConvertState.waiting_for_amount)
+async def process_conversion(message: types.Message, state: FSMContext):
+    try:
+        amount = float(message.text.replace(",", "."))
+        data = await state.get_data()
+        currency = data.get('currency')
+        rates = await get_currency_rates()
+        
+        if currency in rates:
+            result = amount * rates[currency]
+            await message.answer(
+                f"💱 <b>{amount:,.2f} {currency}</b> = <b>{result:,.2f} ₸</b>\n"
+                f"📊 Курс: 1 {currency} = {rates[currency]:.2f} ₸",
+                parse_mode="HTML"
+            )
+        else:
+            await message.answer("❌ Курс временно недоступен, попробуйте позже")
+        await state.clear()
+    except ValueError:
+        await message.answer("❌ Пожалуйста, введите число (например: 100 или 500.50)")
+
+# ========== КУРСЫ ВАЛЮТ (КНОПКИ) ==========
+
+@dp.message(F.text == "💵 Курсы валют")
+async def cmd_currency(message: types.Message):
+    rates = await get_currency_rates()
+    text = "<b>💵 КУРСЫ ВАЛЮТ НБ РК</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+    
+    for code, info in list(CURRENCIES.items())[:4]:
+        rate = rates.get(code, 0)
+        text += f"{info['emoji']} <b>{code} / KZT</b> → <code>{rate:.2f}</code> ₸\n"
+    
+    text += "\n<i>Выберите валюту для конвертации:</i>"
+    await message.answer(text, parse_mode="HTML", reply_markup=currency_menu())
+
+@dp.message(F.text == "🔄 Другие валюты")
+async def other_currencies(message: types.Message):
+    rates = await get_currency_rates()
+    text = "<b>🔄 ДРУГИЕ ВАЛЮТЫ</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+    
+    for code, info in list(CURRENCIES.items())[4:]:
+        rate = rates.get(code, 0)
+        text += f"{info['emoji']} <b>{code} / KZT</b> → <code>{rate:.2f}</code> ₸\n"
+    
+    text += "\n<i>Выберите валюту для конвертации:</i>"
+    await message.answer(text, parse_mode="HTML", reply_markup=other_currencies_menu())
+
+# Кнопки конвертации
+@dp.message(F.text.in_([
+    "🇺🇸 USD → KZT", "🇪🇺 EUR → KZT", "🇷🇺 RUB → KZT", "🇨🇳 CNY → KZT",
+    "🇬🇧 GBP → KZT", "🇹🇷 TRY → KZT", "🇰🇬 KGS → KZT", "🇯🇵 JPY → KZT",
+    "🇨🇦 CAD → KZT", "🇦🇺 AUD → KZT"
+]))
+async def convert_button(message: types.Message, state: FSMContext):
+    currency_map = {
+        "🇺🇸 USD → KZT": "USD", "🇪🇺 EUR → KZT": "EUR",
+        "🇷🇺 RUB → KZT": "RUB", "🇨🇳 CNY → KZT": "CNY",
+        "🇬🇧 GBP → KZT": "GBP", "🇹🇷 TRY → KZT": "TRY",
+        "🇰🇬 KGS → KZT": "KGS", "🇯🇵 JPY → KZT": "JPY",
+        "🇨🇦 CAD → KZT": "CAD", "🇦🇺 AUD → KZT": "AUD"
+    }
+    currency = currency_map.get(message.text)
+    if currency:
+        await state.update_data(currency=currency)
+        await state.set_state(ConvertState.waiting_for_amount)
+        await message.answer(
+            f"💱 <b>Конвертация {CURRENCIES[currency]['emoji']} {currency} → KZT</b>\n\n"
+            f"Напишите сумму цифрами:",
+            parse_mode="HTML"
+        )
+
+@dp.message(F.text == "🔙 Назад к валютам")
+async def back_to_currency_menu(message: types.Message):
+    await cmd_currency(message)
+
+# ========== ПОГОДА (СТРАНЫ → ГОРОДА) ==========
+
+@dp.message(F.text == "🌦 Погода")
+async def weather_countries(message: types.Message):
+    text = "<b>🌍 Выберите страну:</b>"
+    await message.answer(text, parse_mode="HTML", reply_markup=countries_menu())
+
+@dp.message(F.text.in_(CITIES_BY_COUNTRY.keys()))
+async def weather_cities(message: types.Message):
+    country = message.text
+    cities = list(CITIES_BY_COUNTRY[country].keys())
+    buttons = [[KeyboardButton(text=city)] for city in cities]
+    buttons.append([KeyboardButton(text="🔙 Назад к странам")])
+    
+    keyboard = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+    await message.answer(f"🏙 <b>Выберите город в {country}:</b>", parse_mode="HTML", reply_markup=keyboard)
+
+@dp.message(F.text == "🔙 Назад к странам")
+async def back_to_countries(message: types.Message):
+    await weather_countries(message)
+
+@dp.message(F.text.in_(sum([list(cities.keys()) for cities in CITIES_BY_COUNTRY.values()], [])))
+async def get_weather_for_city(message: types.Message):
+    city_name = message.text
+    
+    # Находим координаты города
+    for country, cities in CITIES_BY_COUNTRY.items():
+        if city_name in cities:
+            lat, lon = cities[city_name]
+            await message.bot.send_chat_action(message.chat.id, "typing")
+            weather = await get_weather(city_name, lat, lon)
+            await message.answer(weather, parse_mode="HTML")
+            return
+
+# ========== ОСТАЛЬНЫЕ КОМАНДЫ ==========
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
@@ -222,284 +427,48 @@ async def cmd_start(message: types.Message):
     welcome_text = f"""
 👋 <b>Добро пожаловать, {user.first_name}!</b>
 
-🇰🇿 <b>Многофункциональный бот для Казахстана</b>
+🇰🇿 <b>Многофункциональный бот</b>
 
-<b>Мои возможности:</b>
-💵 <i>Курсы валют и конвертация (USD, EUR, RUB, CNY)</i>
-🌦 <i>Прогноз погоды по городам Казахстана</i>
-💡 <i>Приём ваших идей и предложений</i>
+<b>Возможности:</b>
+💵 <i>Конвертация валют (10 валют)</i>
+🌦 <i>Погода в 40+ городах мира</i>
+💡 <i>Отправка идей админу</i>
 
-<b>⬇️ Выберите действие в меню ниже</b>
-    """
+<b>Как пользоваться конвертацией:</b>
+• Нажмите на любую валюту → напишите сумму
+• Или напишите: 💰 100 USD
+
+<b>⬇️ Выберите действие в меню</b>
+"""
     await message.answer(welcome_text, reply_markup=main_menu())
 
 @dp.message(F.text == "ℹ️ Помощь")
 async def cmd_help(message: types.Message):
     help_text = """
-<b>📚 Справка по использованию бота</b>
+<b>📚 ПОМОЩЬ</b>
 
-<b>💵 Курсы валют:</b>
-• Нажмите "Курсы валют" для перехода в меню конвертации
-• Выберите нужную валюту для быстрой конвертации
-• Или нажмите "Конвертировать вручную" для любого числа
+<b>💵 Конвертация валют:</b>
+• Нажмите "Курсы валют"
+• Выберите валюту
+• Напишите ЛЮБУЮ сумму
 
 <b>🌦 Погода:</b>
-• Доступные города: Астана, Алматы, Бурабай
+• Выберите страну → город
+• Информация: температура, влажность, ветер
 
-<b>💡 Предложить идею:</b>
-• Поделитесь своими идеями по улучшению бота
-
-<b>👨‍💻 Админ команда:</b>
-• /admin - админ-панель (только для администратора)
-    """
+<b>💡 Идеи:</b>
+• Напишите предложение
+• Оно придёт администратору
+"""
     await message.answer(help_text, parse_mode="HTML")
 
-@dp.message(F.text == "🔙 Назад в меню")
-async def cmd_back_to_menu(message: types.Message):
-    await message.answer("🔙 Возвращаюсь в главное меню", reply_markup=main_menu())
-
-# ========== КУРСЫ ВАЛЮТ И КОНВЕРТАЦИЯ ==========
-
-@dp.message(F.text == "💵 Курсы валют")
-async def cmd_currency_menu(message: types.Message):
-    """Показать меню конвертации валют"""
-    rates = await get_currency_rates()
-    
-    text = f"""
-<b>💵 КУРСЫ ВАЛЮТ НБ РК</b>
-━━━━━━━━━━━━━━━━━━━━━
-
-🇺🇸 <b>USD / KZT</b>   →   <code>{rates.get('USD', 0):.2f}</code> ₸
-🇪🇺 <b>EUR / KZT</b>   →   <code>{rates.get('EUR', 0):.2f}</code> ₸
-🇷🇺 <b>RUB / KZT</b>   →   <code>{rates.get('RUB', 0):.2f}</code> ₸
-🇨🇳 <b>CNY / KZT</b>   →   <code>{rates.get('CNY', 0):.2f}</code> ₸
-
-━━━━━━━━━━━━━━━━━━━━━
-<i>Выберите действие ниже:</i>
-    """
-    
-    await message.answer(text, parse_mode="HTML", reply_markup=currency_menu())
-
-@dp.message(F.text == "🔄 Все курсы")
-async def cmd_all_rates(message: types.Message):
-    """Показать все курсы"""
-    rates = await get_currency_rates()
-    
-    text = f"""
-<b>💵 ВСЕ КУРСЫ ВАЛЮТ</b>
-━━━━━━━━━━━━━━━━━━━━━
-
-🇺🇸 1 USD = <code>{rates.get('USD', 0):.2f}</code> ₸
-🇪🇺 1 EUR = <code>{rates.get('EUR', 0):.2f}</code> ₸
-🇷🇺 1 RUB = <code>{rates.get('RUB', 0):.2f}</code> ₸
-🇨🇳 1 CNY = <code>{rates.get('CNY', 0):.2f}</code> ₸
-
-━━━━━━━━━━━━━━━━━━━━━
-🕐 <i>Курсы обновляются автоматически</i>
-    """
-    
-    await message.answer(text, parse_mode="HTML")
-
-# КОНВЕРТАЦИЯ ПО КНОПКАМ
-@dp.message(F.text == "🇺🇸 USD → KZT")
-async def convert_usd(message: types.Message):
-    rates = await get_currency_rates()
-    rate = rates.get('USD', 464.50)
-    text = f"""
-💱 <b>Конвертация USD → KZT</b>
-━━━━━━━━━━━━━━━━━━━━━
-
-🇺🇸 <b>1 USD = {rate:.2f} ₸</b>
-
-<b>Примеры:</b>
-• 10 USD = {rate * 10:.2f} ₸
-• 50 USD = {rate * 50:.2f} ₸
-• 100 USD = {rate * 100:.2f} ₸
-• 500 USD = {rate * 500:.2f} ₸
-• 1000 USD = {rate * 1000:.2f} ₸
-
-━━━━━━━━━━━━━━━━━━━━━
-<i>Для конвертации другой суммы нажмите "💱 Конвертировать вручную"</i>
-    """
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(F.text == "🇪🇺 EUR → KZT")
-async def convert_eur(message: types.Message):
-    rates = await get_currency_rates()
-    rate = rates.get('EUR', 505.80)
-    text = f"""
-💱 <b>Конвертация EUR → KZT</b>
-━━━━━━━━━━━━━━━━━━━━━
-
-🇪🇺 <b>1 EUR = {rate:.2f} ₸</b>
-
-<b>Примеры:</b>
-• 10 EUR = {rate * 10:.2f} ₸
-• 50 EUR = {rate * 50:.2f} ₸
-• 100 EUR = {rate * 100:.2f} ₸
-• 500 EUR = {rate * 500:.2f} ₸
-• 1000 EUR = {rate * 1000:.2f} ₸
-
-━━━━━━━━━━━━━━━━━━━━━
-<i>Для конвертации другой суммы нажмите "💱 Конвертировать вручную"</i>
-    """
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(F.text == "🇷🇺 RUB → KZT")
-async def convert_rub(message: types.Message):
-    rates = await get_currency_rates()
-    rate = rates.get('RUB', 5.12)
-    text = f"""
-💱 <b>Конвертация RUB → KZT</b>
-━━━━━━━━━━━━━━━━━━━━━
-
-🇷🇺 <b>1 RUB = {rate:.2f} ₸</b>
-
-<b>Примеры:</b>
-• 100 RUB = {rate * 100:.2f} ₸
-• 500 RUB = {rate * 500:.2f} ₸
-• 1000 RUB = {rate * 1000:.2f} ₸
-• 5000 RUB = {rate * 5000:.2f} ₸
-• 10000 RUB = {rate * 10000:.2f} ₸
-
-━━━━━━━━━━━━━━━━━━━━━
-<i>Для конвертации другой суммы нажмите "💱 Конвертировать вручную"</i>
-    """
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(F.text == "🇨🇳 CNY → KZT")
-async def convert_cny(message: types.Message):
-    rates = await get_currency_rates()
-    rate = rates.get('CNY', 64.80)
-    text = f"""
-💱 <b>Конвертация CNY → KZT</b>
-━━━━━━━━━━━━━━━━━━━━━
-
-🇨🇳 <b>1 CNY = {rate:.2f} ₸</b>
-
-<b>Примеры:</b>
-• 10 CNY = {rate * 10:.2f} ₸
-• 50 CNY = {rate * 50:.2f} ₸
-• 100 CNY = {rate * 100:.2f} ₸
-• 500 CNY = {rate * 500:.2f} ₸
-• 1000 CNY = {rate * 1000:.2f} ₸
-
-━━━━━━━━━━━━━━━━━━━━━
-<i>Для конвертации другой суммы нажмите "💱 Конвертировать вручную"</i>
-    """
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(F.text == "💱 Конвертировать вручную")
-async def manual_convert_start(message: types.Message, state: FSMContext):
-    """Ручная конвертация - выбор валюты"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🇺🇸 USD → KZT", callback_data="conv_USD")],
-        [InlineKeyboardButton(text="🇪🇺 EUR → KZT", callback_data="conv_EUR")],
-        [InlineKeyboardButton(text="🇷🇺 RUB → KZT", callback_data="conv_RUB")],
-        [InlineKeyboardButton(text="🇨🇳 CNY → KZT", callback_data="conv_CNY")],
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="conv_cancel")]
-    ])
-    
-    await state.set_state(ConvertState.waiting_for_currency)
-    await message.answer(
-        "💱 <b>Выберите валюту для конвертации:</b>",
-        parse_mode="HTML",
-        reply_markup=keyboard
-    )
-
-@dp.callback_query(ConvertState.waiting_for_currency)
-async def manual_convert_currency(callback: types.CallbackQuery, state: FSMContext):
-    """Выбрана валюта, запрашиваем сумму"""
-    if callback.data == "conv_cancel":
-        await state.clear()
-        await callback.message.edit_text("❌ Конвертация отменена")
-        await callback.answer()
-        return
-    
-    currency = callback.data.split("_")[1]
-    await state.update_data(currency=currency)
-    await state.set_state(ConvertState.waiting_for_amount)
-    
-    await callback.message.edit_text(
-        f"💱 <b>Введите сумму в {currency}:</b>\n\n"
-        f"<i>Например: 100, 500.50, 1000</i>\n\n"
-        f"Для отмены отправьте /cancel",
-        parse_mode="HTML"
-    )
-    await callback.answer()
-
-@dp.message(ConvertState.waiting_for_amount)
-async def manual_convert_amount(message: types.Message, state: FSMContext):
-    """Получили сумму, конвертируем"""
-    if message.text == "/cancel":
-        await state.clear()
-        await message.answer("❌ Конвертация отменена", reply_markup=currency_menu())
-        return
-    
-    try:
-        amount = float(message.text.replace(",", "."))
-        if amount <= 0:
-            raise ValueError
-    except:
-        await message.answer("❌ Пожалуйста, введите корректное число (например: 100 или 500.50)")
-        return
-    
-    data = await state.get_data()
-    currency = data.get('currency')
-    rates = await get_currency_rates()
-    
-    currency_names = {
-        'USD': ('🇺🇸 Доллар США', rates.get('USD', 464.50)),
-        'EUR': ('🇪🇺 Евро', rates.get('EUR', 505.80)),
-        'RUB': ('🇷🇺 Российский рубль', rates.get('RUB', 5.12)),
-        'CNY': ('🇨🇳 Китайский юань', rates.get('CNY', 64.80))
-    }
-    
-    name, rate = currency_names.get(currency, ('Unknown', 0))
-    result = amount * rate
-    
-    text = f"""
-💱 <b>РЕЗУЛЬТАТ КОНВЕРТАЦИИ</b>
-━━━━━━━━━━━━━━━━━━━━━
-
-<b>{amount:,.2f} {currency}</b> = <b>{result:,.2f} ₸</b>
-
-<b>Курс:</b> 1 {currency} = {rate:.2f} ₸
-
-━━━━━━━━━━━━━━━━━━━━━
-<i>Курс актуален на текущий момент</i>
-    """
-    
-    await message.answer(text, parse_mode="HTML", reply_markup=currency_menu())
-    await state.clear()
-
-# ========== ПОГОДА ==========
-
-@dp.message(F.text == "🌦 Погода")
-async def cmd_weather_menu(message: types.Message):
-    await message.answer("🌍 <b>Выберите город:</b>", parse_mode="HTML", reply_markup=weather_menu())
-
-@dp.message(F.text.in_(["🌆 Астана", "🌉 Алматы", "🏞 Бурабай"]))
-async def cmd_weather_city(message: types.Message):
-    city_name = message.text.replace("🌆 ", "").replace("🌉 ", "").replace("🏞 ", "")
-    await message.bot.send_chat_action(message.chat.id, "typing")
-    weather = await get_weather(city_name)
-    await message.answer(weather, parse_mode="HTML")
-
-# ========== ИДЕИ ==========
-
 @dp.message(F.text == "💡 Предложить идею")
-async def cmd_idea_start(message: types.Message, state: FSMContext):
+async def idea_start(message: types.Message, state: FSMContext):
     await state.set_state(IdeaState.waiting_for_idea)
-    await message.answer(
-        "💭 <b>Расскажите вашу идею или предложение</b>\n\n"
-        "Напишите всё, что считаете нужным.\n"
-        "<i>Для отмены отправьте /cancel</i>",
-        parse_mode="HTML"
-    )
+    await message.answer("💭 Напишите вашу идею или предложение:\n\n/cancel - отмена")
 
 @dp.message(IdeaState.waiting_for_idea)
-async def cmd_idea_save(message: types.Message, state: FSMContext):
+async def idea_save(message: types.Message, state: FSMContext):
     if message.text == "/cancel":
         await state.clear()
         await message.answer("❌ Отменено", reply_markup=main_menu())
@@ -508,70 +477,72 @@ async def cmd_idea_save(message: types.Message, state: FSMContext):
     user = message.from_user
     await save_idea(user.id, user.username or "no_username", message.text)
     
-    admin_notify = f"""
-📝 <b>НОВАЯ ИДЕЯ!</b>
-👤 <b>От:</b> {user.full_name}
-🆔 <b>ID:</b> <code>{user.id}</code>
-📱 <b>Username:</b> @{user.username if user.username else 'нет'}
-<b>💡 Текст:</b>
-<blockquote>{message.text}</blockquote>
-    """
-    
+    # Отправляем админу
     try:
-        await bot.send_message(ADMIN_ID, admin_notify, parse_mode="HTML")
+        await bot.send_message(
+            ADMIN_ID,
+            f"📝 <b>НОВАЯ ИДЕЯ!</b>\n\n"
+            f"👤 {user.full_name}\n"
+            f"🆔 <code>{user.id}</code>\n"
+            f"📱 @{user.username or 'нет'}\n\n"
+            f"💡 {message.text}",
+            parse_mode="HTML"
+        )
     except:
         pass
     
-    await message.answer(
-        "❤️ <b>Спасибо за вашу идею!</b>\n\nОна отправлена администратору.",
-        parse_mode="HTML",
-        reply_markup=main_menu()
-    )
+    await message.answer("❤️ Спасибо! Идея отправлена администратору.", reply_markup=main_menu())
     await state.clear()
+
+@dp.message(F.text == "🔙 Назад в меню")
+async def back_to_menu(message: types.Message):
+    await message.answer("Главное меню", reply_markup=main_menu())
 
 # ========== АДМИН КОМАНДЫ ==========
 
 @dp.message(Command("admin"))
 async def cmd_admin(message: types.Message):
     if message.from_user.id != ADMIN_ID:
-        await message.answer("⛔ Доступ запрещен!")
+        await message.answer("⛔ Доступ запрещен")
         return
-    await message.answer("🔐 <b>АДМИН-ПАНЕЛЬ</b>", parse_mode="HTML", reply_markup=admin_menu())
+    
+    total_users = await get_total_users()
+    await message.answer(
+        f"🔐 <b>Админ-панель</b>\n\n👥 Пользователей: {total_users}\n\n"
+        f"Команды:\n/stat - статистика\n/ideas - идеи\n/broadcast - рассылка",
+        parse_mode="HTML"
+    )
 
-@dp.message(F.text == "📊 Статистика")
-async def admin_stats(message: types.Message):
+@dp.message(Command("stat"))
+async def admin_stat(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
-    total_users = await get_total_users()
-    await message.answer(f"📊 <b>Статистика</b>\n\n👥 Пользователей: {total_users}", parse_mode="HTML")
+    total = await get_total_users()
+    await message.answer(f"📊 Пользователей: {total}")
 
-@dp.message(F.text == "💡 Последние идеи")
+@dp.message(Command("ideas"))
 async def admin_ideas(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
-    ideas = await get_recent_ideas(10)
+    ideas = await get_recent_ideas(5)
     if not ideas:
-        await message.answer("📭 Нет предложений")
+        await message.answer("📭 Нет идей")
         return
-    text = "💡 <b>Последние идеи:</b>\n\n"
+    text = "💡 Последние идеи:\n\n"
     for idea in ideas:
-        text += f"📝 {idea[3][:100]}\n👤 @{idea[2] or 'anon'}\n━━━━━━━━━\n"
-    await message.answer(text, parse_mode="HTML")
+        text += f"👤 @{idea[2] or 'anon'}\n📝 {idea[3][:100]}\n🕐 {idea[4][:16]}\n━━━━━━━━━\n"
+    await message.answer(text)
 
-@dp.message(F.text == "📢 Сделать рассылку")
-async def admin_broadcast_start(message: types.Message, state: FSMContext):
+@dp.message(Command("broadcast"))
+async def admin_broadcast(message: types.Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         return
     await state.set_state(BroadcastState.waiting_for_message)
-    await message.answer("📢 Отправьте текст для рассылки:\n<i>/cancel - отмена</i>", parse_mode="HTML")
+    await message.answer("📢 Напишите сообщение для рассылки:")
 
 @dp.message(BroadcastState.waiting_for_message)
-async def admin_broadcast_send(message: types.Message, state: FSMContext):
+async def send_broadcast(message: types.Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
-        return
-    if message.text == "/cancel":
-        await state.clear()
-        await message.answer("❌ Отменено")
         return
     users = await get_all_users()
     success = 0
@@ -593,7 +564,6 @@ async def main():
     print("✅ База данных готова")
     await bot.delete_webhook(drop_pending_updates=True)
     print("✅ Бот успешно запущен!")
-    print(f"📱 Бот: @{(await bot.get_me()).username}")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
