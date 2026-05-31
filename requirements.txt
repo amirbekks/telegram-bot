@@ -6,3 +6,14 @@ apscheduler
 pytz
 beautifulsoup4
 lxml
+matplotlib
+Pillow
+pytesseract
+SpeechRecognition
+pydub
+python-telegram-bot
+requests
+pandas
+numpy
+plotly
+yfinance
