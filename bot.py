@@ -15,7 +15,7 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
-WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
+WEATHERAPI_KEY = os.getenv('WEATHERAPI_KEY')  # Ключ от WeatherAPI.com
 
 # ========== КЛАВИАТУРЫ ==========
 
@@ -40,28 +40,30 @@ def countries_menu():
     buttons = [
         [KeyboardButton(text="🇰🇿 Казахстан"), KeyboardButton(text="🇨🇳 Китай")],
         [KeyboardButton(text="🇰🇬 Кыргызстан"), KeyboardButton(text="🇹🇭 Таиланд")],
-        [KeyboardButton(text="🇹🇷 Турция"), KeyboardButton(text="🔙 Назад в меню")]
+        [KeyboardButton(text="🇹🇷 Турция"), KeyboardButton(text="🇦🇪 ОАЭ")],
+        [KeyboardButton(text="🔙 Назад в меню")]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
-# Города
+# Города по странам (на английском для WeatherAPI)
 CITIES = {
     "🇰🇿 Казахстан": ["Астана", "Алматы", "Шымкент", "Актау", "Караганда"],
-    "🇨🇳 Китай": ["Пекин", "Шанхай"],
+    "🇨🇳 Китай": ["Пекин", "Шанхай", "Гуанчжоу"],
     "🇰🇬 Кыргызстан": ["Бишкек", "Ош"],
-    "🇹🇭 Таиланд": ["Бангкок", "Пхукет", "Паттайя"],
-    "🇹🇷 Турция": ["Стамбул", "Анкара", "Анталья"]
+    "🇹🇭 Таиланд": ["Бангкок", "Пхукет", "Паттайя", "Чиангмай"],
+    "🇹🇷 Турция": ["Стамбул", "Анкара", "Анталья", "Измир"],
+    "🇦🇪 ОАЭ": ["Дубай", "Абу-Даби"]
 }
 
-COORDS = {
-    "Астана": (51.1694, 71.4491), "Алматы": (43.2565, 76.9286),
-    "Шымкент": (42.3417, 69.5901), "Актау": (43.6532, 51.1552),
-    "Караганда": (49.8014, 73.1021), "Пекин": (39.9042, 116.4074),
-    "Шанхай": (31.2304, 121.4737), "Бишкек": (42.8746, 74.5698),
-    "Ош": (40.5149, 72.8166), "Бангкок": (13.7367, 100.5231),
-    "Пхукет": (7.8804, 98.3923), "Паттайя": (12.9236, 100.8825),
-    "Стамбул": (41.0082, 28.9784), "Анкара": (39.9334, 32.8597),
-    "Анталья": (36.8969, 30.7133)
+# Названия городов на английском для API
+CITY_ENGLISH = {
+    "Астана": "Astana", "Алматы": "Almaty", "Шымкент": "Shymkent",
+    "Актау": "Aktau", "Караганда": "Karaganda", "Пекин": "Beijing",
+    "Шанхай": "Shanghai", "Гуанчжоу": "Guangzhou", "Бишкек": "Bishkek",
+    "Ош": "Osh", "Бангкок": "Bangkok", "Пхукет": "Phuket",
+    "Паттайя": "Pattaya", "Чиангмай": "Chiang Mai", "Стамбул": "Istanbul",
+    "Анкара": "Ankara", "Анталья": "Antalya", "Измир": "Izmir",
+    "Дубай": "Dubai", "Абу-Даби": "Abu Dhabi"
 }
 
 # ========== СОСТОЯНИЯ ==========
@@ -115,19 +117,17 @@ async def get_total_users():
         result = await cursor.fetchone()
         return result[0] if result else 0
 
-# ========== РЕАЛЬНЫЕ КУРСЫ ВАЛЮТ (ТЕНГЕ) ==========
+# ========== КУРСЫ ВАЛЮТ ==========
 async def get_currency_rates():
-    """Получение реальных курсов валют KZT"""
+    """Получение реальных курсов от НБ РК"""
     try:
         async with aiohttp.ClientSession() as session:
-            # API Национального банка Казахстана
             async with session.get('https://www.nationalbank.kz/ru/exchangerates/exportrates/?periodic=0&format=xml') as response:
                 if response.status == 200:
                     text = await response.text()
                     rates = {}
                     
-                    # Парсим курсы
-                    for currency, code in [('USD', 'USD'), ('EUR', 'EUR'), ('RUB', 'RUB'), ('CNY', 'CNY')]:
+                    for code in ['USD', 'EUR', 'RUB', 'CNY']:
                         search = f'<item currency="{code}">'
                         if search in text:
                             start = text.find(search) + len(search)
@@ -138,55 +138,60 @@ async def get_currency_rates():
                             except:
                                 rates[code] = 0
                     
-                    if rates:
+                    if rates.get('USD'):
                         return rates
     except Exception as e:
-        print(f"Ошибка: {e}")
+        print(f"Ошибка курсов: {e}")
     
-    # РЕАЛЬНЫЕ КУРСЫ НА СЕГОДНЯ (тенге)
-    return {
-        'USD': 485.50,
-        'EUR': 565.80,
-        'RUB': 6.85,
-        'CNY': 72.50
-    }
+    # Реальные курсы на сегодня
+    return {'USD': 485.50, 'EUR': 565.80, 'RUB': 6.85, 'CNY': 72.50}
 
-# ========== ПОГОДА ==========
+# ========== ПОГОДА С WEATHERAPI.COM ==========
 async def get_weather(city_name: str):
-    lat, lon = COORDS.get(city_name, (51.1694, 71.4491))
-    url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=ru"
+    """Получение погоды с WeatherAPI.com"""
+    city_en = CITY_ENGLISH.get(city_name, city_name)
+    url = f"http://api.weatherapi.com/v1/current.json?key={WEATHERAPI_KEY}&q={city_en}&lang=ru"
     
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 if response.status == 200:
                     data = await response.json()
-                    weather_main = data['weather'][0]['main'].lower()
+                    current = data['current']
+                    location = data['location']
                     
-                    if 'clear' in weather_main:
+                    # Эмодзи по погоде
+                    condition = current['condition']['text'].lower()
+                    if 'ясно' in condition or 'солнечно' in condition:
                         emoji = "☀️"
-                    elif 'cloud' in weather_main:
+                    elif 'облачно' in condition or 'пасмурно' in condition:
                         emoji = "☁️"
-                    elif 'rain' in weather_main:
+                    elif 'дождь' in condition:
                         emoji = "🌧"
-                    elif 'snow' in weather_main:
+                    elif 'гроза' in condition:
+                        emoji = "⛈"
+                    elif 'снег' in condition:
                         emoji = "❄️"
+                    elif 'туман' in condition:
+                        emoji = "🌫"
                     else:
                         emoji = "🌡"
                     
                     return f"""
 {emoji} <b>{city_name}</b>
 
-🌡 <b>Температура:</b> {data['main']['temp']:.1f}°C
-🎯 <b>Ощущается как:</b> {data['main']['feels_like']:.1f}°C
-💧 <b>Влажность:</b> {data['main']['humidity']}%
-🌬 <b>Ветер:</b> {data['wind']['speed']:.1f} м/с
-📝 <b>Описание:</b> {data['weather'][0]['description'].capitalize()}
+🌡 <b>Температура:</b> {current['temp_c']:.1f}°C
+🎯 <b>Ощущается как:</b> {current['feelslike_c']:.1f}°C
+💧 <b>Влажность:</b> {current['humidity']}%
+🌬 <b>Ветер:</b> {current['wind_kph']:.1f} км/ч
+📝 <b>Описание:</b> {current['condition']['text']}
+
+🗺 <i>{location['country']} | Обновлено: {current['last_updated'][-5:]}</i>
 """
                 else:
-                    return f"❌ Ошибка погоды: {response.status}"
+                    return f"❌ Не удалось получить погоду для {city_name}"
     except Exception as e:
-        return f"❌ Ошибка: {str(e)[:50]}"
+        return f"❌ Ошибка погоды: {str(e)[:50]}"
 
 # ========== БОТ ==========
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
@@ -198,9 +203,9 @@ async def cmd_start(message: types.Message):
     await add_user(user.id, user.username, user.full_name)
     await message.answer(
         f"👋 <b>Добро пожаловать, {user.first_name}!</b>\n\n"
-        f"🇰🇿 <b>Курсы валют НБ РК и погода</b>\n\n"
-        f"💵 Реальные курсы от Национального банка\n"
-        f"🌦 Погода из OpenWeatherMap\n\n"
+        f"🇰🇿 <b>Курсы валют и погода по всему миру</b>\n\n"
+        f"💵 Реальные курсы от НБ РК\n"
+        f"🌦 Точная погода от WeatherAPI.com\n\n"
         f"⬇️ <b>Выберите действие:</b>",
         reply_markup=main_menu()
     )
@@ -263,7 +268,7 @@ async def show_cities(message: types.Message):
 async def back_to_countries(message: types.Message):
     await weather_countries(message)
 
-@dp.message(F.text.in_(COORDS.keys()))
+@dp.message(F.text.in_(CITY_ENGLISH.keys()))
 async def get_weather_for_city(message: types.Message):
     await message.bot.send_chat_action(message.chat.id, "typing")
     weather = await get_weather(message.text)
@@ -272,7 +277,7 @@ async def get_weather_for_city(message: types.Message):
 @dp.message(F.text == "💡 Предложить идею")
 async def idea_start(message: types.Message, state: FSMContext):
     await state.set_state(IdeaState.waiting_for_idea)
-    await message.answer("💭 Напишите вашу идею:\n/cancel - отмена")
+    await message.answer("💭 Напишите вашу идею:\n\n/cancel - отмена")
 
 @dp.message(IdeaState.waiting_for_idea)
 async def idea_save(message: types.Message, state: FSMContext):
@@ -285,8 +290,16 @@ async def idea_save(message: types.Message, state: FSMContext):
     await save_idea(user.id, user.username or "no_username", message.text)
     
     try:
-        await bot.send_message(ADMIN_ID, f"📝 НОВАЯ ИДЕЯ!\n\nОт: {user.full_name}\nID: {user.id}\n\n{message.text}")
-        await message.answer("✅ Спасибо! Идея отправлена.", reply_markup=main_menu())
+        await bot.send_message(
+            ADMIN_ID,
+            f"📝 <b>НОВАЯ ИДЕЯ!</b>\n\n"
+            f"👤 {user.full_name}\n"
+            f"🆔 <code>{user.id}</code>\n"
+            f"📱 @{user.username or 'нет'}\n\n"
+            f"💡 {message.text}",
+            parse_mode="HTML"
+        )
+        await message.answer("✅ Спасибо! Идея отправлена администратору.", reply_markup=main_menu())
     except:
         await message.answer("✅ Спасибо! Идея сохранена.", reply_markup=main_menu())
     await state.clear()
@@ -295,9 +308,16 @@ async def idea_save(message: types.Message, state: FSMContext):
 async def cmd_help(message: types.Message):
     await message.answer(
         "<b>📚 ПОМОЩЬ</b>\n\n"
-        "<b>💵 Курсы валют:</b> Нажмите кнопку → выберите валюту → напишите сумму\n\n"
-        "<b>🌦 Погода:</b> Выберите страну → город\n\n"
-        "<b>💡 Идеи:</b> Напишите предложение, оно придёт админу",
+        "<b>💵 Курсы валют:</b>\n"
+        "• Нажмите 'Курсы валют'\n"
+        "• Выберите валюту\n"
+        "• Напишите сумму\n\n"
+        "<b>🌦 Погода:</b>\n"
+        "• Выберите страну\n"
+        "• Выберите город\n\n"
+        "<b>💡 Идеи:</b>\n"
+        "• Напишите предложение\n"
+        "• Оно придёт администратору",
         parse_mode="HTML"
     )
 
@@ -309,13 +329,31 @@ async def back_to_menu(message: types.Message):
 async def admin_panel(message: types.Message):
     if message.from_user.id == ADMIN_ID:
         total = await get_total_users()
-        await message.answer(f"🔐 Админ-панель\n\n👥 Пользователей: {total}")
+        await message.answer(f"🔐 <b>Админ-панель</b>\n\n👥 Пользователей: {total}", parse_mode="HTML")
+
+@dp.message(Command("ideas"))
+async def admin_ideas(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    async with aiosqlite.connect("bot_database.db") as db:
+        cursor = await db.execute("SELECT id, username, idea_text, created_at FROM ideas ORDER BY id DESC LIMIT 10")
+        ideas = await cursor.fetchall()
+    
+    if not ideas:
+        await message.answer("📭 Нет идей")
+        return
+    
+    text = "💡 <b>Последние идеи:</b>\n\n"
+    for idea in ideas:
+        text += f"#{idea[0]} | @{idea[1] or 'anon'}\n📝 {idea[2][:100]}\n🕐 {idea[3][:16]}\n━━━━━━━━━\n"
+    await message.answer(text, parse_mode="HTML")
 
 async def main():
-    print("🚀 Запуск бота...")
+    print("🚀 Запуск бота с WeatherAPI.com...")
     await init_db()
     await bot.delete_webhook(drop_pending_updates=True)
-    print(f"✅ Бот @{(await bot.get_me()).username} запущен!")
+    me = await bot.get_me()
+    print(f"✅ Бот @{me.username} запущен!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
