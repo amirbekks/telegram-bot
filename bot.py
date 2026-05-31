@@ -48,34 +48,68 @@ def currency_menu():
 
 def notifications_menu():
     buttons = [
-        [KeyboardButton(text="🌅 Включить утренние"), KeyboardButton(text="🌙 Включить вечерние")],
+        [KeyboardButton(text="🌅 Утро 9:00"), KeyboardButton(text="🌙 Вечер 19:00")],
         [KeyboardButton(text="🔕 Отключить всё"), KeyboardButton(text="🔙 Назад")]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
-def weather_countries_menu():
-    buttons = [
-        [KeyboardButton(text="🇰🇿 Казахстан"), KeyboardButton(text="🇨🇳 Китай")],
-        [KeyboardButton(text="🇹🇭 Таиланд"), KeyboardButton(text="🇹🇷 Турция")],
-        [KeyboardButton(text="🔙 Назад")]
-    ]
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-
-# ========== ГОРОДА ==========
+# ========== ВСЕ СТРАНЫ И ГОРОДА ==========
 
 COUNTRIES = {
-    "🇰🇿 Казахстан": ["Астана", "Алматы", "Шымкент"],
-    "🇨🇳 Китай": ["Пекин", "Шанхай"],
-    "🇹🇭 Таиланд": ["Бангкок", "Пхукет"],
-    "🇹🇷 Турция": ["Стамбул", "Анталья"]
+    "🇰🇿 Казахстан": ["Астана", "Алматы", "Шымкент", "Актау", "Караганда", "Уральск", "Атырау", "Павлодар"],
+    "🇨🇳 Китай": ["Пекин", "Шанхай", "Гуанчжоу", "Сиань", "Чэнду", "Шэньчжэнь", "Гонконг"],
+    "🇰🇬 Кыргызстан": ["Бишкек", "Ош", "Джалал-Абад", "Каракол", "Токмок", "Нарын"],
+    "🇹🇭 Таиланд": ["Бангкок", "Пхукет", "Паттайя", "Чиангмай", "Краби", "Самуи", "Хуахин"],
+    "🇹🇷 Турция": ["Стамбул", "Анкара", "Анталья", "Измир", "Бодрум", "Каппадокия", "Мармарис", "Кемер"],
+    "🇦🇪 ОАЭ": ["Дубай", "Абу-Даби", "Шарджа", "Рас-эль-Хайма", "Фуджейра"],
+    "🇪🇬 Египет": ["Каир", "Хургада", "Шарм-эль-Шейх", "Луксор", "Марса-Алам"],
+    "🇮🇳 Индия": ["Дели", "Гоа", "Мумбаи", "Джайпур", "Агра", "Керала"]
 }
 
+def weather_countries_menu():
+    buttons = [[KeyboardButton(text=country)] for country in COUNTRIES.keys()]
+    buttons.append([KeyboardButton(text="🔙 Назад")])
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+# ========== КООРДИНАТЫ ВСЕХ ГОРОДОВ ==========
+
 COORDS = {
+    # Казахстан
     "Астана": (51.1694, 71.4491), "Алматы": (43.2565, 76.9286),
-    "Шымкент": (42.3417, 69.5901), "Пекин": (39.9042, 116.4074),
-    "Шанхай": (31.2304, 121.4737), "Бангкок": (13.7367, 100.5231),
-    "Пхукет": (7.8804, 98.3923), "Стамбул": (41.0082, 28.9784),
-    "Анталья": (36.8969, 30.7133)
+    "Шымкент": (42.3417, 69.5901), "Актау": (43.6532, 51.1552),
+    "Караганда": (49.8014, 73.1021), "Уральск": (51.2167, 51.3667),
+    "Атырау": (47.1167, 51.8833), "Павлодар": (52.2875, 76.9733),
+    # Китай
+    "Пекин": (39.9042, 116.4074), "Шанхай": (31.2304, 121.4737),
+    "Гуанчжоу": (23.1291, 113.2644), "Сиань": (34.3416, 108.9402),
+    "Чэнду": (30.5728, 104.0668), "Шэньчжэнь": (22.5431, 114.0579),
+    "Гонконг": (22.3193, 114.1694),
+    # Кыргызстан
+    "Бишкек": (42.8746, 74.5698), "Ош": (40.5149, 72.8166),
+    "Джалал-Абад": (40.9334, 73.0027), "Каракол": (42.4907, 78.3936),
+    "Токмок": (42.8373, 75.2930), "Нарын": (41.4286, 75.9911),
+    # Таиланд
+    "Бангкок": (13.7367, 100.5231), "Пхукет": (7.8804, 98.3923),
+    "Паттайя": (12.9236, 100.8825), "Чиангмай": (18.7883, 98.9853),
+    "Краби": (8.0863, 98.9069), "Самуи": (9.5120, 100.0136),
+    "Хуахин": (12.5683, 99.9578),
+    # Турция
+    "Стамбул": (41.0082, 28.9784), "Анкара": (39.9334, 32.8597),
+    "Анталья": (36.8969, 30.7133), "Измир": (38.4192, 27.1287),
+    "Бодрум": (37.0344, 27.4305), "Каппадокия": (38.6435, 34.8289),
+    "Мармарис": (36.8554, 28.2765), "Кемер": (36.6001, 30.5606),
+    # ОАЭ
+    "Дубай": (25.2048, 55.2708), "Абу-Даби": (24.4539, 54.3773),
+    "Шарджа": (25.3463, 55.4209), "Рас-эль-Хайма": (25.7895, 55.9432),
+    "Фуджейра": (25.1288, 56.3265),
+    # Египет
+    "Каир": (30.0444, 31.2357), "Хургада": (27.2574, 33.8128),
+    "Шарм-эль-Шейх": (27.9158, 34.33), "Луксор": (25.6809, 32.6394),
+    "Марса-Алам": (25.0663, 34.8961),
+    # Индия
+    "Дели": (28.6139, 77.2090), "Гоа": (15.2993, 74.1240),
+    "Мумбаи": (19.0760, 72.8777), "Джайпур": (26.9124, 75.7873),
+    "Агра": (27.1767, 78.0081), "Керала": (10.8505, 76.2711)
 }
 
 # ========== БАЗА ДАННЫХ ==========
@@ -210,11 +244,11 @@ async def get_weather(city_name: str):
             async with session.get(url) as response:
                 if response.status == 200:
                     data = await response.json()
-                    emoji = "☀️" if 'clear' in data['weather'][0]['main'].lower() else "☁️"
-                    return f"{emoji} {city_name}: {data['main']['temp']:.1f}°C, {data['weather'][0]['description']}"
+                    emoji = "☀️" if 'clear' in data['weather'][0]['main'].lower() else "☁️" if 'cloud' in data['weather'][0]['main'].lower() else "🌧"
+                    return f"{emoji} <b>{city_name}</b>\n🌡 {data['main']['temp']:.1f}°C\n💧 Влажность: {data['main']['humidity']}%\n🌬 Ветер: {data['wind']['speed']:.1f} м/с"
     except:
         pass
-    return None
+    return f"❌ Ошибка погоды для {city_name}"
 
 # ========== РАССЫЛКА ==========
 
@@ -223,42 +257,32 @@ async def send_morning():
     users = await get_all_subscribed()
     rates = await get_currency_rates()
     
-    text = f"🌅 <b>Доброе утро!</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
-    text += f"<b>💰 Курсы валют:</b>\n"
-    text += f"🇺🇸 USD: {rates['USD']:.2f} ₸\n"
-    text += f"🇪🇺 EUR: {rates['EUR']:.2f} ₸\n"
-    text += f"🇷🇺 RUB: {rates['RUB']:.2f} ₸\n"
-    text += f"🇨🇳 CNY: {rates['CNY']:.2f} ₸\n"
+    text = f"🌅 <b>Доброе утро!</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n<b>💰 Курсы валют:</b>\n"
+    for curr, rate in rates.items():
+        text += f"{curr}: {rate:.2f} ₸\n"
     text += f"\n<i>Хорошего дня!</i>"
     
     for user_id in users:
         try:
             await bot.send_message(user_id, text, parse_mode="HTML")
-            print(f"✅ Отправлено {user_id}")
         except:
-            print(f"❌ Ошибка {user_id}")
-    print("🌅 Утренняя рассылка завершена")
+            pass
 
 async def send_evening():
     print("🌙 Отправка вечерних уведомлений...")
     users = await get_all_subscribed()
     rates = await get_currency_rates()
     
-    text = f"🌙 <b>Вечерний дайджест</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
-    text += f"<b>💰 Курсы валют:</b>\n"
-    text += f"🇺🇸 USD: {rates['USD']:.2f} ₸\n"
-    text += f"🇪🇺 EUR: {rates['EUR']:.2f} ₸\n"
-    text += f"🇷🇺 RUB: {rates['RUB']:.2f} ₸\n"
-    text += f"🇨🇳 CNY: {rates['CNY']:.2f} ₸\n"
+    text = f"🌙 <b>Вечерний дайджест</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n<b>💰 Курсы валют:</b>\n"
+    for curr, rate in rates.items():
+        text += f"{curr}: {rate:.2f} ₸\n"
     text += f"\n<i>Спокойной ночи!</i>"
     
     for user_id in users:
         try:
             await bot.send_message(user_id, text, parse_mode="HTML")
-            print(f"✅ Отправлено {user_id}")
         except:
-            print(f"❌ Ошибка {user_id}")
-    print("🌙 Вечерняя рассылка завершена")
+            pass
 
 # ========== БОТ ==========
 
@@ -276,7 +300,7 @@ async def cmd_start(message: types.Message):
         f"👋 Привет, {user.first_name}!\n\n"
         f"🇰🇿 <b>Мой бот поможет:</b>\n"
         f"• Узнать курс валют 💵\n"
-        f"• Посмотреть погоду 🌍\n"
+        f"• Посмотреть погоду в 50+ городах мира 🌍\n"
         f"• Настроить уведомления 🔔\n"
         f"• Отправить идею 💡\n\n"
         f"⬇️ <b>Выберите действие:</b>",
@@ -303,7 +327,7 @@ async def convert_start(message: types.Message, state: FSMContext):
     currency = currency_map[message.text]
     await state.update_data(currency=currency)
     await state.set_state(ConvertState.waiting_for_amount)
-    await message.answer(f"💱 <b>Конвертация {currency} → KZT</b>\n\nВведите сумму:")
+    await message.answer(f"💱 <b>Конвертация {currency} → KZT</b>\n\nВведите сумму (например: 100):")
 
 @dp.message(ConvertState.waiting_for_amount)
 async def convert_amount(message: types.Message, state: FSMContext):
@@ -322,7 +346,7 @@ async def convert_amount(message: types.Message, state: FSMContext):
             )
         await state.clear()
     except:
-        await message.answer("❌ Введите число!", reply_markup=currency_menu())
+        await message.answer("❌ Введите число! Например: 100", reply_markup=currency_menu())
         await state.clear()
 
 @dp.message(F.text == "🌍 Погода")
@@ -341,7 +365,7 @@ async def show_cities(message: types.Message):
 async def get_weather_city(message: types.Message):
     await message.bot.send_chat_action(message.chat.id, "typing")
     weather = await get_weather(message.text)
-    await message.answer(weather if weather else "❌ Ошибка погоды")
+    await message.answer(weather, parse_mode="HTML")
 
 @dp.message(F.text == "🔔 Уведомления")
 async def notifications_menu_handler(message: types.Message):
@@ -356,15 +380,15 @@ async def notifications_menu_handler(message: types.Message):
         reply_markup=notifications_menu()
     )
 
-@dp.message(F.text == "🌅 Включить утренние")
+@dp.message(F.text == "🌅 Утро 9:00")
 async def enable_morning(message: types.Message):
     await update_notifications(message.from_user.id, morning=True)
-    await message.answer("✅ Утренние уведомления ВКЛЮЧЕНЫ! (в 9:00)")
+    await message.answer("✅ Утренние уведомления ВКЛЮЧЕНЫ! В 9:00 будет приходить курс валют.")
 
-@dp.message(F.text == "🌙 Включить вечерние")
+@dp.message(F.text == "🌙 Вечер 19:00")
 async def enable_evening(message: types.Message):
     await update_notifications(message.from_user.id, evening=True)
-    await message.answer("✅ Вечерние уведомления ВКЛЮЧЕНЫ! (в 19:00)")
+    await message.answer("✅ Вечерние уведомления ВКЛЮЧЕНЫ! В 19:00 будет приходить курс валют.")
 
 @dp.message(F.text == "🔕 Отключить всё")
 async def disable_all(message: types.Message):
@@ -386,7 +410,7 @@ async def idea_save(message: types.Message, state: FSMContext):
     await save_idea(user.id, user.username or "no_username", message.text)
     try:
         await bot.send_message(ADMIN_ID, f"📝 НОВАЯ ИДЕЯ!\n\nОт: {user.full_name}\nID: {user.id}\n\n{message.text}")
-        await message.answer("✅ Спасибо! Идея отправлена.", reply_markup=main_menu())
+        await message.answer("✅ Спасибо! Идея отправлена администратору.", reply_markup=main_menu())
     except:
         await message.answer("✅ Спасибо! Идея сохранена.", reply_markup=main_menu())
     await state.clear()
@@ -398,7 +422,8 @@ async def cmd_help(message: types.Message):
         "<b>💵 Курсы валют:</b>\n"
         "• Выберите валюту → напишите сумму\n\n"
         "<b>🌍 Погода:</b>\n"
-        "• Выберите страну → город\n\n"
+        "• Выберите страну → город\n"
+        "• Доступны: Казахстан, Китай, Кыргызстан, Таиланд, Турция, ОАЭ, Египет, Индия (50+ городов)\n\n"
         "<b>🔔 Уведомления:</b>\n"
         "• Включите утренние (9:00) и/или вечерние (19:00)\n"
         "• Каждый день будет приходить курс валют\n\n"
@@ -438,7 +463,6 @@ async def main():
     await init_db()
     print("✅ База данных готова")
     
-    # Запускаем планировщик
     scheduler.add_job(send_morning, 'cron', hour=9, minute=0, id='morning')
     scheduler.add_job(send_evening, 'cron', hour=19, minute=0, id='evening')
     scheduler.start()
