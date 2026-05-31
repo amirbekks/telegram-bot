@@ -2,15 +2,15 @@ import asyncio
 import aiosqlite
 import aiohttp
 import re
-from datetime import datetime, timedelta
+import random
+from datetime import datetime
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.client.default import DefaultBotProperties
 import os
-import random
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,96 +19,111 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
 
-# ========== КРАСИВЫЕ КЛАВИАТУРЫ ==========
-
-def main_menu():
-    """Главное меню с новым дизайном"""
-    buttons = [
-        [KeyboardButton(text="💵 Валюты"), KeyboardButton(text="₿ Крипта")],
-        [KeyboardButton(text="📈 Графики"), KeyboardButton(text="💰 Бюджет")],
-        [KeyboardButton(text="🌦 Погода"), KeyboardButton(text="📰 Новости")],
-        [KeyboardButton(text="⭐ Избранное"), KeyboardButton(text="⏰ Напомнить")],
-        [KeyboardButton(text="🎮 Игры"), KeyboardButton(text="💎 Premium")],
-        [KeyboardButton(text="🆘 Помощь"), KeyboardButton(text="👤 Профиль")],
-        [KeyboardButton(text="📍 Обменники", request_location=True)]
-    ]
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-
-def profile_menu():
-    """Меню профиля"""
-    buttons = [
-        [KeyboardButton(text="📊 Моя статистика"), KeyboardButton(text="🎁 Бонусы")],
-        [KeyboardButton(text="🔗 Рефералка"), KeyboardButton(text="🔙 Назад")]
-    ]
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-
-def games_menu():
-    """Меню игр"""
-    buttons = [
-        [KeyboardButton(text="🎮 Эко-игра"), KeyboardButton(text="❓ Викторина")],
-        [KeyboardButton(text="🔮 Гороскоп"), KeyboardButton(text="🔙 Назад")]
-    ]
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-
-def countries_menu():
-    """Меню стран для погоды"""
-    buttons = [
-        [KeyboardButton(text="🇰🇿 Казахстан"), KeyboardButton(text="🇨🇳 Китай")],
-        [KeyboardButton(text="🇰🇬 Кыргызстан"), KeyboardButton(text="🇹🇭 Таиланд")],
-        [KeyboardButton(text="🇹🇷 Турция"), KeyboardButton(text="🇦🇪 ОАЭ")],
-        [KeyboardButton(text="🔙 Назад")]
-    ]
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-
-# Города и координаты
-CITIES = {
-    "🇰🇿 Казахстан": ["Астана", "Алматы", "Шымкент", "Актау"],
-    "🇨🇳 Китай": ["Пекин", "Шанхай"],
-    "🇰🇬 Кыргызстан": ["Бишкек", "Ош"],
-    "🇹🇭 Таиланд": ["Бангкок", "Пхукет", "Паттайя"],
-    "🇹🇷 Турция": ["Стамбул", "Анталья", "Анкара"],
-    "🇦🇪 ОАЭ": ["Дубай", "Абу-Даби"]
-}
-
-COORDS = {
-    "Астана": (51.1694, 71.4491), "Алматы": (43.2565, 76.9286),
-    "Шымкент": (42.3417, 69.5901), "Актау": (43.6532, 51.1552),
-    "Пекин": (39.9042, 116.4074), "Шанхай": (31.2304, 121.4737),
-    "Бишкек": (42.8746, 74.5698), "Ош": (40.5149, 72.8166),
-    "Бангкок": (13.7367, 100.5231), "Пхукет": (7.8804, 98.3923),
-    "Паттайя": (12.9236, 100.8825), "Стамбул": (41.0082, 28.9784),
-    "Анталья": (36.8969, 30.7133), "Анкара": (39.9334, 32.8597),
-    "Дубай": (25.2048, 55.2708), "Абу-Даби": (24.4539, 54.3773)
-}
-
 # ========== СОСТОЯНИЯ ==========
+class ConvertState(StatesGroup):
+    waiting_for_amount = State()
+
 class IdeaState(StatesGroup):
     waiting_for_idea = State()
 
 class GameState(StatesGroup):
-    trading = State()
+    buying = State()
+    selling = State()
 
-class ReminderState(StatesGroup):
-    waiting_for_text = State()
-    waiting_for_time = State()
+# ========== КЛАВИАТУРЫ ==========
+
+def main_menu():
+    buttons = [
+        [KeyboardButton(text="💵 Курсы валют")],
+        [KeyboardButton(text="🌍 Погода"), KeyboardButton(text="🎮 Игра")],
+        [KeyboardButton(text="💡 Идея"), KeyboardButton(text="📊 Профиль")],
+        [KeyboardButton(text="❓ Помощь")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+def currency_menu():
+    buttons = [
+        [KeyboardButton(text="🇺🇸 USD → KZT"), KeyboardButton(text="🇪🇺 EUR → KZT")],
+        [KeyboardButton(text="🇷🇺 RUB → KZT"), KeyboardButton(text="🇨🇳 CNY → KZT")],
+        [KeyboardButton(text="🔙 Назад")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+def weather_countries_menu():
+    buttons = [
+        [KeyboardButton(text="🇰🇿 Казахстан"), KeyboardButton(text="🇨🇳 Китай")],
+        [KeyboardButton(text="🇰🇬 Кыргызстан"), KeyboardButton(text="🇹🇭 Таиланд")],
+        [KeyboardButton(text="🇹🇷 Турция"), KeyboardButton(text="🇦🇪 ОАЭ")],
+        [KeyboardButton(text="🇪🇬 Египет"), KeyboardButton(text="🇮🇳 Индия")],
+        [KeyboardButton(text="🔙 Назад")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+def game_menu():
+    buttons = [
+        [KeyboardButton(text="💰 Баланс"), KeyboardButton(text="📈 Курсы")],
+        [KeyboardButton(text="🛒 Купить"), KeyboardButton(text="💸 Продать")],
+        [KeyboardButton(text="📊 Портфель"), KeyboardButton(text="🔙 Назад")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+# ========== ВСЕ ГОРОДА ПО СТРАНАМ ==========
+
+COUNTRIES = {
+    "🇰🇿 Казахстан": ["Астана", "Алматы", "Шымкент", "Актау", "Караганда", "Уральск"],
+    "🇨🇳 Китай": ["Пекин", "Шанхай", "Гуанчжоу", "Сиань", "Чэнду"],
+    "🇰🇬 Кыргызстан": ["Бишкек", "Ош", "Джалал-Абад", "Каракол", "Токмок"],
+    "🇹🇭 Таиланд": ["Бангкок", "Пхукет", "Паттайя", "Чиангмай", "Краби", "Самуи"],
+    "🇹🇷 Турция": ["Стамбул", "Анкара", "Анталья", "Измир", "Бодрум", "Каппадокия"],
+    "🇦🇪 ОАЭ": ["Дубай", "Абу-Даби", "Шарджа", "Рас-эль-Хайма"],
+    "🇪🇬 Египет": ["Каир", "Хургада", "Шарм-эль-Шейх", "Луксор"],
+    "🇮🇳 Индия": ["Дели", "Гоа", "Мумбаи", "Джайпур", "Агра"]
+}
+
+# КООРДИНАТЫ ВСЕХ ГОРОДОВ
+COORDS = {
+    # Казахстан
+    "Астана": (51.1694, 71.4491), "Алматы": (43.2565, 76.9286),
+    "Шымкент": (42.3417, 69.5901), "Актау": (43.6532, 51.1552),
+    "Караганда": (49.8014, 73.1021), "Уральск": (51.2167, 51.3667),
+    # Китай
+    "Пекин": (39.9042, 116.4074), "Шанхай": (31.2304, 121.4737),
+    "Гуанчжоу": (23.1291, 113.2644), "Сиань": (34.3416, 108.9402), "Чэнду": (30.5728, 104.0668),
+    # Кыргызстан
+    "Бишкек": (42.8746, 74.5698), "Ош": (40.5149, 72.8166),
+    "Джалал-Абад": (40.9334, 73.0027), "Каракол": (42.4907, 78.3936), "Токмок": (42.8373, 75.2930),
+    # Таиланд
+    "Бангкок": (13.7367, 100.5231), "Пхукет": (7.8804, 98.3923),
+    "Паттайя": (12.9236, 100.8825), "Чиангмай": (18.7883, 98.9853),
+    "Краби": (8.0863, 98.9069), "Самуи": (9.5120, 100.0136),
+    # Турция
+    "Стамбул": (41.0082, 28.9784), "Анкара": (39.9334, 32.8597),
+    "Анталья": (36.8969, 30.7133), "Измир": (38.4192, 27.1287),
+    "Бодрум": (37.0344, 27.4305), "Каппадокия": (38.6435, 34.8289),
+    # ОАЭ
+    "Дубай": (25.2048, 55.2708), "Абу-Даби": (24.4539, 54.3773),
+    "Шарджа": (25.3463, 55.4209), "Рас-эль-Хайма": (25.7895, 55.9432),
+    # Египет
+    "Каир": (30.0444, 31.2357), "Хургада": (27.2574, 33.8128),
+    "Шарм-эль-Шейх": (27.9158, 34.33), "Луксор": (25.6809, 32.6394),
+    # Индия
+    "Дели": (28.6139, 77.2090), "Гоа": (15.2993, 74.1240),
+    "Мумбаи": (19.0760, 72.8777), "Джайпур": (26.9124, 75.7873), "Агра": (27.1767, 78.0081)
+}
 
 # ========== БАЗА ДАННЫХ ==========
 
 async def init_db():
     async with aiosqlite.connect("bot_database.db") as db:
-        # Пользователи
         await db.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
                 username TEXT,
                 full_name TEXT,
                 registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                balance INTEGER DEFAULT 10000,
-                premium BOOLEAN DEFAULT 0,
-                last_bonus DATE
+                game_balance INTEGER DEFAULT 10000
             )
         ''')
-        # Идеи
         await db.execute('''
             CREATE TABLE IF NOT EXISTS ideas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,7 +133,6 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        # История конвертаций
         await db.execute('''
             CREATE TABLE IF NOT EXISTS history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,31 +143,12 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        # Игровой портфель
         await db.execute('''
             CREATE TABLE IF NOT EXISTS portfolio (
                 user_id INTEGER,
                 currency TEXT,
                 amount REAL,
                 PRIMARY KEY (user_id, currency)
-            )
-        ''')
-        # Избранные города
-        await db.execute('''
-            CREATE TABLE IF NOT EXISTS favorites (
-                user_id INTEGER,
-                city TEXT,
-                PRIMARY KEY (user_id, city)
-            )
-        ''')
-        # Напоминания
-        await db.execute('''
-            CREATE TABLE IF NOT EXISTS reminders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                text TEXT,
-                remind_time TIMESTAMP,
-                is_active BOOLEAN DEFAULT 1
             )
         ''')
         await db.commit()
@@ -174,15 +169,15 @@ async def save_history(user_id: int, currency: str, amount: float, result: float
         ''', (user_id, currency, amount, result))
         await db.commit()
 
-async def get_history(user_id: int, limit=10):
+async def get_history(user_id: int):
     async with aiosqlite.connect("bot_database.db") as db:
         cursor = await db.execute('''
             SELECT currency, amount, result, created_at 
             FROM history 
             WHERE user_id = ? 
             ORDER BY created_at DESC 
-            LIMIT ?
-        ''', (user_id, limit))
+            LIMIT 10
+        ''', (user_id,))
         return await cursor.fetchall()
 
 async def save_idea(user_id: int, username: str, idea_text: str):
@@ -199,43 +194,56 @@ async def get_total_users():
         result = await cursor.fetchone()
         return result[0] if result else 0
 
-async def get_user_balance(user_id: int):
+# ========== ИГРОВЫЕ ФУНКЦИИ ==========
+
+async def get_game_balance(user_id: int):
     async with aiosqlite.connect("bot_database.db") as db:
-        cursor = await db.execute("SELECT balance FROM users WHERE user_id = ?", (user_id,))
+        cursor = await db.execute("SELECT game_balance FROM users WHERE user_id = ?", (user_id,))
         result = await cursor.fetchone()
         return result[0] if result else 10000
 
-async def update_balance(user_id: int, amount: int):
+async def update_game_balance(user_id: int, amount: int):
     async with aiosqlite.connect("bot_database.db") as db:
-        await db.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
+        await db.execute("UPDATE users SET game_balance = game_balance + ? WHERE user_id = ?", (amount, user_id))
         await db.commit()
 
-async def add_favorite(user_id: int, city: str):
-    async with aiosqlite.connect("bot_database.db") as db:
-        await db.execute("INSERT OR REPLACE INTO favorites (user_id, city) VALUES (?, ?)", (user_id, city))
-        await db.commit()
-
-async def get_favorites(user_id: int):
-    async with aiosqlite.connect("bot_database.db") as db:
-        cursor = await db.execute("SELECT city FROM favorites WHERE user_id = ?", (user_id,))
-        return [row[0] for row in await cursor.fetchall()]
-
-async def add_reminder(user_id: int, text: str, remind_time: datetime):
+async def buy_currency_game(user_id: int, currency: str, amount: float, price: float):
+    total_cost = int(amount * price)
+    balance = await get_game_balance(user_id)
+    
+    if balance < total_cost:
+        return False, f"❌ Не хватает! Нужно {total_cost} ₸, у вас {balance} ₸"
+    
     async with aiosqlite.connect("bot_database.db") as db:
         await db.execute('''
-            INSERT INTO reminders (user_id, text, remind_time)
+            INSERT INTO portfolio (user_id, currency, amount)
             VALUES (?, ?, ?)
-        ''', (user_id, text, remind_time))
+            ON CONFLICT(user_id, currency) DO UPDATE SET
+            amount = amount + ?
+        ''', (user_id, currency, amount, amount))
+        await db.execute("UPDATE users SET game_balance = game_balance - ? WHERE user_id = ?", (total_cost, user_id))
         await db.commit()
+    
+    return True, f"✅ Куплено {amount} {currency} за {total_cost} ₸"
 
-async def get_reminders(user_id: int):
+async def sell_currency_game(user_id: int, currency: str, amount: float, price: float):
     async with aiosqlite.connect("bot_database.db") as db:
-        cursor = await db.execute('''
-            SELECT id, text, remind_time 
-            FROM reminders 
-            WHERE user_id = ? AND is_active = 1 AND remind_time > datetime('now')
-            ORDER BY remind_time
-        ''', (user_id,))
+        cursor = await db.execute("SELECT amount FROM portfolio WHERE user_id = ? AND currency = ?", (user_id, currency))
+        result = await cursor.fetchone()
+        
+        if not result or result[0] < amount:
+            return False, f"❌ У вас нет столько {currency}! Есть: {result[0] if result else 0}"
+        
+        total_income = int(amount * price)
+        await db.execute("UPDATE portfolio SET amount = amount - ? WHERE user_id = ? AND currency = ?", (amount, user_id, currency))
+        await db.execute("UPDATE users SET game_balance = game_balance + ? WHERE user_id = ?", (total_income, user_id))
+        await db.commit()
+    
+    return True, f"✅ Продано {amount} {currency} за {total_income} ₸"
+
+async def get_portfolio(user_id: int):
+    async with aiosqlite.connect("bot_database.db") as db:
+        cursor = await db.execute("SELECT currency, amount FROM portfolio WHERE user_id = ? AND amount > 0", (user_id,))
         return await cursor.fetchall()
 
 # ========== КУРСЫ ВАЛЮТ ==========
@@ -263,20 +271,6 @@ async def get_currency_rates():
         pass
     return {'USD': 485.50, 'EUR': 565.80, 'RUB': 6.85, 'CNY': 72.50}
 
-async def get_crypto_rates():
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether&vs_currencies=usd') as response:
-                data = await response.json()
-                usd_to_kzt = 485.50
-                return {
-                    'BTC': data.get('bitcoin', {}).get('usd', 60000) * usd_to_kzt,
-                    'ETH': data.get('ethereum', {}).get('usd', 3000) * usd_to_kzt,
-                    'USDT': data.get('tether', {}).get('usd', 1) * usd_to_kzt,
-                }
-    except:
-        return {'BTC': 29000000, 'ETH': 1450000, 'USDT': 485}
-
 # ========== ПОГОДА ==========
 
 async def get_weather(city_name: str):
@@ -295,743 +289,252 @@ async def get_weather(city_name: str):
                         emoji = "☁️"
                     elif 'rain' in weather_main:
                         emoji = "🌧"
+                    elif 'snow' in weather_main:
+                        emoji = "❄️"
                     else:
                         emoji = "🌡"
                     
                     return f"""
 {emoji} <b>{city_name}</b>
 
-🌡 <b>Температура:</b> {data['main']['temp']:.1f}°C
-🎯 <b>Ощущается как:</b> {data['main']['feels_like']:.1f}°C
-💧 <b>Влажность:</b> {data['main']['humidity']}%
-🌬 <b>Ветер:</b> {data['wind']['speed']:.1f} м/с
-📝 <b>Описание:</b> {data['weather'][0]['description'].capitalize()}
+🌡 Температура: {data['main']['temp']:.1f}°C
+🎯 Ощущается: {data['main']['feels_like']:.1f}°C
+💧 Влажность: {data['main']['humidity']}%
+🌬 Ветер: {data['wind']['speed']:.1f} м/с
+📝 {data['weather'][0]['description'].capitalize()}
 """
                 else:
                     return f"❌ Ошибка погоды для {city_name}"
     except Exception as e:
         return f"❌ Ошибка: {str(e)[:50]}"
 
-# ========== НОВОСТИ ==========
-
-async def get_news():
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get('https://tengrinews.kz/news/') as response:
-                if response.status == 200:
-                    from bs4 import BeautifulSoup
-                    html = await response.text()
-                    soup = BeautifulSoup(html, 'html.parser')
-                    news = []
-                    for item in soup.select('.news-item')[:5]:
-                        title = item.select_one('.news-title')
-                        if title:
-                            news.append(title.text.strip())
-                    if news:
-                        return news
-    except:
-        pass
-    return ["Курс доллара стабилен", "Погода в выходные", "Новые законы в Казахстане"]
-
-# ========== ГОРОСКОП ==========
-
-HOROSCOPES = {
-    "Овен": "🌟 Сегодня отличный день для финансовых операций!",
-    "Телец": "💰 Будьте осторожны с крупными тратами.",
-    "Близнецы": "📈 Удачный день для обмена валюты.",
-    "Рак": "🎁 Ожидайте прибыльных предложений.",
-    "Лев": "🔮 Ваша интуиция не подведёт.",
-    "Дева": "📊 Планируйте бюджет на месяц вперёд.",
-    "Весы": "⚖️ Хороший день для инвестиций.",
-    "Скорпион": "⚠️ Избегайте спонтанных покупок.",
-    "Стрелец": "🚀 Время для крупных решений.",
-    "Козерог": "💎 Деньги будут поступать легко.",
-    "Водолей": "💡 Неожиданные доходы возможны.",
-    "Рыбы": "🎯 Доверяйте своим финансовым решениям."
-}
-
 # ========== БОТ ==========
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 
-def get_random_emoji():
-    emojis = ["🚀", "🌟", "💎", "🎯", "🔥", "⭐", "💫", "✨", "⚡", "💪"]
-    return random.choice(emojis)
-
-# ========== СТАРТ (КРАСИВЫЙ ДИЗАЙН) ==========
+# ========== СТАРТ ==========
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     user = message.from_user
     await add_user(user.id, user.username, user.full_name)
     
-    welcome_text = f"""
-╔══════════════════════════════╗
-║      🌟 ДОБРО ПОЖАЛОВАТЬ     ║
-║         В МЕГА-БОТА          ║
-╚══════════════════════════════╝
+    await message.answer(
+        f"👋 Привет, {user.first_name}!\n\n"
+        f"🇰🇿 <b>Мой бот поможет:</b>\n"
+        f"• Узнать курс валют 💵\n"
+        f"• Конвертировать деньги 💱\n"
+        f"• Посмотреть погоду в 40+ городах 🌍\n"
+        f"• Поиграть в экономическую игру 🎮\n"
+        f"• Отправить идею 💡\n\n"
+        f"⬇️ <b>Выберите действие:</b>",
+        reply_markup=main_menu()
+    )
 
-{get_random_emoji()} <b>Привет, {user.first_name}!</b>
+# ========== КУРСЫ ВАЛЮТ ==========
 
-<b>📱 ВОЗМОЖНОСТИ МЕГА-БОТА:</b>
-
-┌─────────────────────────────────┐
-│ 💰 <b>ФИНАНСЫ</b>                 │
-├─────────────────────────────────┤
-│ 💵 Курсы валют (USD, EUR, RUB, CNY) │
-│ ₿ Криптовалюты (BTC, ETH, USDT) │
-│ 📈 Графики курсов               │
-│ 💰 Бюджетный трекер             │
-└─────────────────────────────────┘
-
-┌─────────────────────────────────┐
-│ 🌍 <b>ИНФОРМАЦИЯ</b>              │
-├─────────────────────────────────┤
-│ 🌦 Погода в 15+ городах мира     │
-│ 📰 Новости Казахстана            │
-│ 🗺 Ближайшие обменники           │
-└─────────────────────────────────┘
-
-┌─────────────────────────────────┐
-│ 🎮 <b>РАЗВЛЕЧЕНИЯ</b>             │
-├─────────────────────────────────┤
-│ 🎮 Экономическая игра            │
-│ ❓ Викторина о Казахстане        │
-│ 🔮 Гороскоп на сегодня           │
-└─────────────────────────────────┘
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<b>💡 ПРОСТЫЕ ПРИМЕРЫ:</b>
-• Напишите <code>100 USD</code> - моментальная конвертация
-• Нажмите <b>💵 Валюты</b> для курсов
-• /alert USD 490 - уведомление о курсе
-
-👇 <b>Выберите действие в меню ниже</b>
-"""
-    await message.answer(welcome_text, parse_mode="HTML", reply_markup=main_menu())
-
-# ========== ПРОФИЛЬ ==========
-
-@dp.message(F.text == "👤 Профиль")
-async def show_profile(message: types.Message):
-    user = message.from_user
-    balance = await get_user_balance(user.id)
-    
-    async with aiosqlite.connect("bot_database.db") as db:
-        cursor = await db.execute("SELECT COUNT(*) FROM history WHERE user_id = ?", (user.id,))
-        conversions = (await cursor.fetchone())[0]
-    
-    profile_text = f"""
-╔══════════════════════════════╗
-║         👤 ПРОФИЛЬ          ║
-╚══════════════════════════════╝
-
-<b>{user.full_name}</b>
-@{user.username or 'не указан'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<b>📊 СТАТИСТИКА:</b>
-┌─────────────────────────────────┐
-│ 🆔 ID: <code>{user.id}</code>               │
-│ 📅 Регистрация: {datetime.now().strftime('%d.%m.%Y')} │
-└─────────────────────────────────┘
-
-<b>💰 ФИНАНСЫ:</b>
-┌─────────────────────────────────┐
-│ 💰 Игровой баланс: {balance:,.0f} ₸       │
-│ 💱 Конвертаций: {conversions}            │
-└─────────────────────────────────┘
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<i>Нажмите «🎁 Бонусы» для получения подарков!</i>
-"""
-    await message.answer(profile_text, parse_mode="HTML", reply_markup=profile_menu())
-
-@dp.message(F.text == "🎁 Бонусы")
-async def show_bonuses(message: types.Message):
-    today = datetime.now().date()
-    
-    async with aiosqlite.connect("bot_database.db") as db:
-        cursor = await db.execute("SELECT last_bonus FROM users WHERE user_id = ?", (message.from_user.id,))
-        result = await cursor.fetchone()
-        last_bonus = result[0] if result else None
-        
-        if last_bonus != str(today):
-            await update_balance(message.from_user.id, 500)
-            await db.execute("UPDATE users SET last_bonus = ? WHERE user_id = ?", (str(today), message.from_user.id))
-            await db.commit()
-            bonus_text = "✅ <b>+500 ₸</b> - ежедневный бонус получен!"
-        else:
-            bonus_text = "⏰ Вы уже получили сегодняшний бонус. Возвращайтесь завтра!"
-    
-    await message.answer(f"🎁 <b>ЕЖЕДНЕВНЫЙ БОНУС</b>\n\n{bonus_text}", parse_mode="HTML")
-
-@dp.message(F.text == "📊 Моя статистика")
-async def my_stats(message: types.Message):
-    balance = await get_user_balance(message.from_user.id)
-    history = await get_history(message.from_user.id, 5)
-    
-    text = f"""
-╔══════════════════════════════╗
-║      📊 МОЯ СТАТИСТИКА      ║
-╚══════════════════════════════╝
-
-💰 <b>Баланс:</b> {balance:,.0f} игровых ₸
-
-<b>📜 ПОСЛЕДНИЕ КОНВЕРТАЦИИ:</b>
-"""
-    if history:
-        for curr, amt, res, dt in history[:5]:
-            text += f"\n• {curr}: {amt:.2f} = {res:.2f} ₸"
-            text += f"\n  🕐 {dt[:16]}"
-    else:
-        text += "\n📭 Нет истории"
-    
-    await message.answer(text, parse_mode="HTML")
-
-# ========== ВАЛЮТЫ И КРИПТА ==========
-
-@dp.message(F.text == "💵 Валюты")
+@dp.message(F.text == "💵 Курсы валют")
 async def show_currencies(message: types.Message):
     rates = await get_currency_rates()
-    text = """
-╔══════════════════════════════╗
-║      💵 КУРСЫ ВАЛЮТ        ║
-║      НАЦИОНАЛЬНОГО БАНКА      ║
-╚══════════════════════════════╝
+    text = f"<b>💵 Курсы валют НБ РК</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+    text += f"🇺🇸 USD / KZT → {rates['USD']:.2f} ₸\n"
+    text += f"🇪🇺 EUR / KZT → {rates['EUR']:.2f} ₸\n"
+    text += f"🇷🇺 RUB / KZT → {rates['RUB']:.2f} ₸\n"
+    text += f"🇨🇳 CNY / KZT → {rates['CNY']:.2f} ₸\n\n"
+    text += f"<i>Нажмите на валюту для конвертации</i>"
+    await message.answer(text, reply_markup=currency_menu())
 
-"""
-    for curr, rate in rates.items():
-        emoji = {"USD": "🇺🇸", "EUR": "🇪🇺", "RUB": "🇷🇺", "CNY": "🇨🇳"}.get(curr, "💵")
-        text += f"┌─────────────────────────────────┐\n"
-        text += f"│ {emoji} <b>{curr}/KZT</b>                          │\n"
-        text += f"│    → <code>{rate:,.2f}</code> ₸                   │\n"
-        text += f"└─────────────────────────────────┘\n"
-    
-    text += f"\n🕐 <i>Обновлено: {datetime.now().strftime('%H:%M:%S')}</i>\n"
-    text += f"\n💡 <i>Напишите: 100 USD</i>"
-    await message.answer(text, parse_mode="HTML")
+@dp.message(F.text.in_(["🇺🇸 USD → KZT", "🇪🇺 EUR → KZT", "🇷🇺 RUB → KZT", "🇨🇳 CNY → KZT"]))
+async def convert_start(message: types.Message, state: FSMContext):
+    currency_map = {
+        "🇺🇸 USD → KZT": "USD",
+        "🇪🇺 EUR → KZT": "EUR", 
+        "🇷🇺 RUB → KZT": "RUB",
+        "🇨🇳 CNY → KZT": "CNY"
+    }
+    currency = currency_map[message.text]
+    await state.update_data(currency=currency)
+    await state.set_state(ConvertState.waiting_for_amount)
+    await message.answer(f"💱 <b>Конвертация {currency} → KZT</b>\n\nВведите сумму (например: 100):")
 
-@dp.message(F.text == "₿ Крипта")
-async def show_crypto(message: types.Message):
-    rates = await get_crypto_rates()
-    text = """
-╔══════════════════════════════╗
-║      ₿ КРИПТОВАЛЮТЫ        ║
-╚══════════════════════════════╝
-
-"""
-    for crypto, rate in rates.items():
-        emoji = {"BTC": "₿", "ETH": "⟠", "USDT": "💲"}.get(crypto, "💰")
-        text += f"┌─────────────────────────────────┐\n"
-        text += f"│ {emoji} <b>{crypto}/KZT</b>                         │\n"
-        text += f"│    → <code>{rate:,.0f}</code> ₸                   │\n"
-        text += f"└─────────────────────────────────┘\n"
-    
-    await message.answer(text, parse_mode="HTML")
-
-# ========== ПОГОДА ==========
-
-@dp.message(F.text == "🌦 Погода")
-async def weather_countries(message: types.Message):
-    text = """
-╔══════════════════════════════╗
-║         🌍 ПОГОДА          ║
-║     ВЫБЕРИТЕ СТРАНУ         ║
-╚══════════════════════════════╝
-
-┌─────────────────────────────────┐
-│ 🇰🇿 Казахстан                    │
-│ 🇨🇳 Китай                        │
-│ 🇰🇬 Кыргызстан                   │
-│ 🇹🇭 Таиланд                      │
-│ 🇹🇷 Турция                       │
-│ 🇦🇪 ОАЭ                          │
-└─────────────────────────────────┘
-"""
-    await message.answer(text, parse_mode="HTML", reply_markup=countries_menu())
-
-@dp.message(F.text.in_(CITIES.keys()))
-async def show_cities_menu(message: types.Message):
-    country = message.text
-    cities = CITIES[country]
-    buttons = [[KeyboardButton(text=city)] for city in cities]
-    buttons.append([KeyboardButton(text="🔙 Назад")])
-    await message.answer(f"🏙 <b>Города {country}:</b>", reply_markup=ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True))
-
-@dp.message(F.text.in_(COORDS.keys()))
-async def get_weather_for_city(message: types.Message):
-    await message.bot.send_chat_action(message.chat.id, "typing")
-    weather = await get_weather(message.text)
-    await message.answer(weather)
-
-# ========== НОВОСТИ ==========
-
-@dp.message(F.text == "📰 Новости")
-async def show_news(message: types.Message):
-    news = await get_news()
-    text = """
-╔══════════════════════════════╗
-║      📰 ПОСЛЕДНИЕ НОВОСТИ   ║
-║         КАЗАХСТАНА           ║
-╚══════════════════════════════╝
-
-"""
-    for i, item in enumerate(news, 1):
-        text += f"{i}. {item}\n"
-    
-    await message.answer(text)
-
-# ========== ИГРЫ ==========
-
-@dp.message(F.text == "🎮 Игры")
-async def games_menu_handler(message: types.Message):
-    text = """
-╔══════════════════════════════╗
-║         🎮 ИГРЫ            ║
-╚══════════════════════════════╝
-
-┌─────────────────────────────────┐
-│ 🎮 Экономическая игра            │
-│ ❓ Викторина о Казахстане        │
-│ 🔮 Гороскоп на сегодня           │
-└─────────────────────────────────┘
-"""
-    await message.answer(text, parse_mode="HTML", reply_markup=games_menu())
-
-@dp.message(F.text == "🎮 Эко-игра")
-async def economic_game(message: types.Message):
-    balance = await get_user_balance(message.from_user.id)
-    rates = await get_currency_rates()
-    
-    text = f"""
-╔══════════════════════════════╗
-║      🎮 ЭКОНОМИЧЕСКАЯ ИГРА   ║
-╚══════════════════════════════╝
-
-💰 <b>Ваш баланс:</b> {balance:,.0f} ₸
-
-<b>📈 Текущие курсы:</b>
-🇺🇸 USD: {rates['USD']:.2f} ₸
-🇪🇺 EUR: {rates['EUR']:.2f} ₸
-🇷🇺 RUB: {rates['RUB']:.2f} ₸
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<b>Команды:</b>
-• /buy USD 100 - купить 100 USD
-• /sell USD 100 - продать 100 USD
-• /portfolio - мой портфель
-"""
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(Command("buy"))
-async def buy_currency(message: types.Message):
-    parts = message.text.split()
-    if len(parts) != 3:
-        await message.answer("❌ Используйте: /buy USD 100")
-        return
-    
-    currency = parts[1].upper()
-    amount = float(parts[2])
-    rates = await get_currency_rates()
-    balance = await get_user_balance(message.from_user.id)
-    total = amount * rates[currency]
-    
-    if balance < total:
-        await message.answer(f"❌ Недостаточно средств! Нужно {total:,.0f} ₸, у вас {balance:,.0f} ₸")
-        return
-    
-    await update_balance(message.from_user.id, -int(total))
-    
-    async with aiosqlite.connect("bot_database.db") as db:
-        await db.execute('''
-            INSERT INTO portfolio (user_id, currency, amount)
-            VALUES (?, ?, ?)
-            ON CONFLICT(user_id, currency) DO UPDATE SET
-            amount = amount + ?
-        ''', (message.from_user.id, currency, amount, amount))
-        await db.commit()
-    
-    await message.answer(f"✅ Куплено {amount} {currency} за {total:,.0f} ₸")
-
-@dp.message(Command("sell"))
-async def sell_currency(message: types.Message):
-    parts = message.text.split()
-    if len(parts) != 3:
-        await message.answer("❌ Используйте: /sell USD 100")
-        return
-    
-    currency = parts[1].upper()
-    amount = float(parts[2])
-    rates = await get_currency_rates()
-    
-    async with aiosqlite.connect("bot_database.db") as db:
-        cursor = await db.execute("SELECT amount FROM portfolio WHERE user_id = ? AND currency = ?", (message.from_user.id, currency))
-        result = await cursor.fetchone()
-        
-        if not result or result[0] < amount:
-            await message.answer("❌ У вас нет столько валюты!")
-            return
-        
-        total = amount * rates[currency]
-        await update_balance(message.from_user.id, int(total))
-        await db.execute("UPDATE portfolio SET amount = amount - ? WHERE user_id = ? AND currency = ?", (amount, message.from_user.id, currency))
-        await db.commit()
-    
-    await message.answer(f"✅ Продано {amount} {currency} за {total:,.0f} ₸")
-
-@dp.message(Command("portfolio"))
-async def show_portfolio(message: types.Message):
-    async with aiosqlite.connect("bot_database.db") as db:
-        cursor = await db.execute("SELECT currency, amount FROM portfolio WHERE user_id = ? AND amount > 0", (message.from_user.id,))
-        portfolio = await cursor.fetchall()
-    
-    if not portfolio:
-        await message.answer("📭 Ваш портфель пуст")
-        return
-    
-    text = "💼 <b>МОЙ ПОРТФЕЛЬ</b>\n━━━━━━━━━━━━━━━━━━━━━\n"
-    for curr, amt in portfolio:
-        text += f"\n{curr}: {amt:.2f}"
-    await message.answer(text)
-
-# ========== ВИКТОРИНА ==========
-
-QUESTIONS = [
-    {"q": "Столица Казахстана?", "options": ["Алматы", "Астана", "Шымкент"], "correct": 1},
-    {"q": "Национальная валюта Казахстана?", "options": ["Рубль", "Тенге", "Сом"], "correct": 1},
-    {"q": "Какое море омывает Казахстан?", "options": ["Черное", "Аральское", "Каспийское"], "correct": 2},
-]
-
-@dp.message(F.text == "❓ Викторина")
-async def start_quiz(message: types.Message):
-    q = random.choice(QUESTIONS)
-    buttons = [[KeyboardButton(text=opt)] for opt in q["options"]]
-    keyboard = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
-    
-    await message.answer(f"❓ <b>{q['q']}</b>", reply_markup=keyboard)
-    
-    async def check_answer(m):
-        if m.text == q["options"][q["correct"]]:
-            await update_balance(m.from_user.id, 100)
-            await m.answer("✅ Правильно! +100 ₸", reply_markup=main_menu())
-        else:
-            await m.answer(f"❌ Неправильно! Правильный ответ: {q['options'][q['correct']]}", reply_markup=main_menu())
-        
-        dp.message.handlers.remove(check_answer)
-    
-    dp.message.register(check_answer)
-
-# ========== ГОРОСКОП ==========
-
-@dp.message(F.text == "🔮 Гороскоп")
-async def horoscope_menu(message: types.Message):
-    buttons = [[KeyboardButton(text=sign)] for sign in HOROSCOPES.keys()]
-    buttons.append([KeyboardButton(text="🔙 Назад")])
-    await message.answer("🔮 <b>Выберите знак зодиака:</b>", reply_markup=ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True))
-
-@dp.message(F.text.in_(HOROSCOPES.keys()))
-async def show_horoscope(message: types.Message):
-    text = f"""
-╔══════════════════════════════╗
-║         🔮 ГОРОСКОП         ║
-║         {message.text}           ║
-╚══════════════════════════════╝
-
-{HOROSCOPES[message.text]}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<i>✨ Удачного дня!</i>
-"""
-    await message.answer(text, parse_mode="HTML")
-
-# ========== НАПОМИНАНИЯ ==========
-
-@dp.message(F.text == "⏰ Напомнить")
-async def reminder_menu(message: types.Message):
-    buttons = [
-        [KeyboardButton(text="➕ Новое"), KeyboardButton(text="📋 Мои")],
-        [KeyboardButton(text="🔙 Назад")]
-    ]
-    await message.answer("⏰ <b>НАПОМИНАНИЯ</b>", reply_markup=ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True))
-
-@dp.message(F.text == "➕ Новое")
-async def new_reminder(message: types.Message, state: FSMContext):
-    await state.set_state(ReminderState.waiting_for_text)
-    await message.answer("📝 Напишите текст напоминания:", reply_markup=types.ReplyKeyboardRemove())
-
-@dp.message(ReminderState.waiting_for_text)
-async def reminder_text(message: types.Message, state: FSMContext):
-    await state.update_data(text=message.text)
-    await state.set_state(ReminderState.waiting_for_time)
-    await message.answer("⏰ Напишите время (пример: 25.12.2024 15:30):")
-
-@dp.message(ReminderState.waiting_for_time)
-async def reminder_time(message: types.Message, state: FSMContext):
+@dp.message(ConvertState.waiting_for_amount)
+async def convert_amount(message: types.Message, state: FSMContext):
     try:
-        remind_time = datetime.strptime(message.text, "%d.%m.%Y %H:%M")
+        amount = float(message.text.replace(",", "."))
         data = await state.get_data()
-        await add_reminder(message.from_user.id, data['text'], remind_time)
-        await message.answer(f"✅ Напоминание установлено на {message.text}", reply_markup=main_menu())
-        await state.clear()
-    except:
-        await message.answer("❌ Неверный формат! Используйте: 25.12.2024 15:30")
-
-@dp.message(F.text == "📋 Мои")
-async def list_reminders(message: types.Message):
-    reminders = await get_reminders(message.from_user.id)
-    if not reminders:
-        await message.answer("📭 У вас нет активных напоминаний")
-        return
-    
-    text = "⏰ <b>МОИ НАПОМИНАНИЯ</b>\n━━━━━━━━━━━━━━━━━━━━━\n"
-    for rid, txt, rt in reminders:
-        text += f"\n#{rid}\n📝 {txt}\n🕐 {rt[:16]}\n"
-    await message.answer(text)
-
-# ========== ИЗБРАННОЕ ==========
-
-@dp.message(F.text == "⭐ Избранное")
-async def favorites_menu(message: types.Message):
-    favorites = await get_favorites(message.from_user.id)
-    
-    if favorites:
-        text = "⭐ <b>ВАШИ ИЗБРАННЫЕ ГОРОДА</b>\n━━━━━━━━━━━━━━━━━━━━━\n"
-        for city in favorites:
-            text += f"\n• {city}"
-    else:
-        text = "📭 У вас пока нет избранных городов"
-    
-    buttons = [[KeyboardButton(text="➕ Добавить город"), KeyboardButton(text="🗑 Удалить")]]
-    buttons.append([KeyboardButton(text="🔙 Назад")])
-    await message.answer(text, reply_markup=ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True))
-
-@dp.message(F.text == "➕ Добавить город")
-async def add_favorite_prompt(message: types.Message):
-    await message.answer("🌍 Напишите название города для добавления в избранное:")
-
-@dp.message(F.text.in_(COORDS.keys()))
-async def save_favorite(message: types.Message):
-    await add_favorite(message.from_user.id, message.text)
-    await message.answer(f"✅ Город {message.text} добавлен в избранное!")
-
-# ========== КОНВЕРТАЦИЯ ИЗ СООБЩЕНИЯ ==========
-
-@dp.message()
-async def auto_convert(message: types.Message):
-    # Конвертация: 100 USD
-    match = re.match(r'^(\d+(?:\.\d+)?)\s+([A-Z]{3})$', message.text.upper().strip())
-    if match:
-        amount = float(match.group(1))
-        currency = match.group(2)
+        currency = data.get('currency')
         rates = await get_currency_rates()
         
         if currency in rates:
             result = amount * rates[currency]
             await save_history(message.from_user.id, currency, amount, result)
-            await message.answer(f"💱 <b>{amount:,.2f} {currency}</b> = <b>{result:,.2f} ₸</b>")
+            await message.answer(
+                f"💱 <b>{amount:,.2f} {currency}</b> = <b>{result:,.2f} ₸</b>\n"
+                f"📊 Курс: 1 {currency} = {rates[currency]:.2f} ₸",
+                reply_markup=currency_menu()
+            )
+        else:
+            await message.answer("❌ Ошибка курса", reply_markup=currency_menu())
+        await state.clear()
+    except ValueError:
+        await message.answer("❌ Введите число! Например: 100", reply_markup=currency_menu())
 
-# ========== ПОМОЩЬ ==========
+# ========== ПОГОДА (ВСЕ СТРАНЫ И ГОРОДА) ==========
 
-@dp.message(F.text == "🆘 Помощь")
-async def cmd_help(message: types.Message):
-    help_text = """
-╔══════════════════════════════╗
-║         📚 ПОМОЩЬ           ║
-╚══════════════════════════════╝
+@dp.message(F.text == "🌍 Погода")
+async def weather_countries(message: types.Message):
+    await message.answer("🌍 <b>Выберите страну:</b>", reply_markup=weather_countries_menu())
 
-<b>🔹 БЫСТРЫЕ КОМАНДЫ:</b>
-┌─────────────────────────────────┐
-│ <code>100 USD</code> - конвертация      │
-│ /buy USD 100 - покупка в игре    │
-│ /sell USD 100 - продажа в игре   │
-└─────────────────────────────────┘
+@dp.message(F.text.in_(COUNTRIES.keys()))
+async def show_cities(message: types.Message):
+    country = message.text
+    cities = COUNTRIES[country]
+    buttons = [[KeyboardButton(text=city)] for city in cities]
+    buttons.append([KeyboardButton(text="🔙 Назад")])
+    await message.answer(f"🏙 <b>Города {country}:</b>", reply_markup=ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True))
 
-<b>🔹 ВАЛЮТЫ:</b>
-┌─────────────────────────────────┐
-│ 💵 Валюты - курсы НБ РК          │
-│ ₿ Крипта - криптовалюты         │
-└─────────────────────────────────┘
+@dp.message(F.text.in_(COORDS.keys()))
+async def get_weather_city(message: types.Message):
+    city = message.text
+    await message.bot.send_chat_action(message.chat.id, "typing")
+    weather = await get_weather(city)
+    await message.answer(weather)
 
-<b>🔹 ПОГОДА:</b>
-┌─────────────────────────────────┐
-│ 🌦 Погода → страна → город       │
-│ ⭐ Избранное - сохранить город   │
-└─────────────────────────────────┘
+# ========== ЭКОНОМИЧЕСКАЯ ИГРА ==========
 
-<b>🔹 ИГРЫ:</b>
-┌─────────────────────────────────┐
-│ 🎮 Эко-игра - трейдинг          │
-│ ❓ Викторина - заработай ₸      │
-│ 🔮 Гороскоп - прогноз           │
-└─────────────────────────────────┘
+@dp.message(F.text == "🎮 Игра")
+async def game_menu_handler(message: types.Message):
+    balance = await get_game_balance(message.from_user.id)
+    text = f"""
+🎮 <b>ЭКОНОМИЧЕСКАЯ ИГРА</b>
+━━━━━━━━━━━━━━━━━━━━━
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<i>✨ По всем вопросам: @alisher_kz</i>
+💰 Ваш баланс: {balance} ₸
+
+<b>Как играть:</b>
+• Следите за курсами валют
+• Покупайте дёшево, продавайте дорого
+• Зарабатывайте на разнице курсов
+
+<b>Доступные валюты:</b>
+🇺🇸 USD, 🇪🇺 EUR, 🇷🇺 RUB, 🇨🇳 CNY
 """
-    await message.answer(help_text, parse_mode="HTML")
+    await message.answer(text, reply_markup=game_menu())
 
-# ========== ОБМЕННИКИ ==========
+@dp.message(F.text == "💰 Баланс")
+async def game_balance(message: types.Message):
+    balance = await get_game_balance(message.from_user.id)
+    await message.answer(f"💰 <b>Ваш игровой баланс:</b> {balance} ₸")
 
-@dp.message(F.location)
-async def get_nearby_exchangers(message: types.Message):
-    text = """
-╔══════════════════════════════╗
-║      🗺 БЛИЖАЙШИЕ ОБМЕННИКИ  ║
-╚══════════════════════════════╝
+@dp.message(F.text == "📈 Курсы")
+async def game_rates(message: types.Message):
+    rates = await get_currency_rates()
+    text = f"<b>📈 Текущие курсы в игре:</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+    text += f"🇺🇸 USD: {rates['USD']:.2f} ₸\n"
+    text += f"🇪🇺 EUR: {rates['EUR']:.2f} ₸\n"
+    text += f"🇷🇺 RUB: {rates['RUB']:.2f} ₸\n"
+    text += f"🇨🇳 CNY: {rates['CNY']:.2f} ₸\n\n"
+    text += f"<i>Используйте кнопки Купить/Продать</i>"
+    await message.answer(text)
 
-<b>📍 Ваша локация:</b>
-Широта: {:.4f}
-Долгота: {:.4f}
+@dp.message(F.text == "🛒 Купить")
+async def game_buy_start(message: types.Message, state: FSMContext):
+    await state.set_state(GameState.buying)
+    await message.answer(
+        "🛒 <b>Покупка валюты</b>\n\n"
+        "Напишите в формате: <code>USD 100</code>\n"
+        "Пример: USD 50\n\n"
+        "<i>/cancel - отмена</i>"
+    )
 
-<b>🏦 Рекомендуемые обменники:</b>
-
-1. <b>Best Change</b>
-   📍 ул. Абая, 15
-   💱 USD: 483 / 488
-   🕐 09:00 - 20:00
-
-2. <b>Алтын ОБМЕН</b>
-   📍 пр. Достык, 42
-   💱 USD: 484 / 489
-   🕐 Круглосуточно
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<i>Нажмите на обменник для построения маршрута</i>
-""".format(message.location.latitude, message.location.longitude)
-    
-    await message.answer(text, parse_mode="HTML")
-
-# ========== ГРАФИКИ ==========
-
-@dp.message(F.text == "📈 Графики")
-async def chart_menu(message: types.Message):
-    buttons = [
-        [KeyboardButton(text="📊 USD"), KeyboardButton(text="📊 EUR")],
-        [KeyboardButton(text="📊 RUB"), KeyboardButton(text="📊 CNY")],
-        [KeyboardButton(text="🔙 Назад")]
-    ]
-    await message.answer("📈 <b>ВЫБЕРИТЕ ВАЛЮТУ ДЛЯ ГРАФИКА</b>", reply_markup=ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True))
-
-@dp.message(F.text.startswith("📊 "))
-async def show_chart_simple(message: types.Message):
-    currency = message.text.split()[1]
-    await message.answer(f"📈 <b>График {currency}/KZT</b>\n\nКурс стабилен. Подробные графики скоро будут доступны в Premium версии!", parse_mode="HTML")
-
-# ========== БЮДЖЕТ ==========
-
-@dp.message(F.text == "💰 Бюджет")
-async def budget_menu(message: types.Message):
-    text = """
-╔══════════════════════════════╗
-║      💰 БЮДЖЕТНЫЙ ТРЕКЕР    ║
-╚══════════════════════════════╝
-
-<b>Команды для управления бюджетом:</b>
-• /add 5000 такси - добавить расход
-• /stats - статистика за месяц
-• /categories - мои категории
-
-<b>Пример:</b>
-<code>/add 2500 обед</code>
-"""
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(Command("add"))
-async def add_expense(message: types.Message):
-    parts = message.text.split(maxsplit=2)
-    if len(parts) < 2:
-        await message.answer("❌ Используйте: /add 5000 такси")
+@dp.message(GameState.buying)
+async def game_buy(message: types.Message, state: FSMContext):
+    if message.text == "/cancel":
+        await state.clear()
+        await message.answer("❌ Отменено", reply_markup=game_menu())
         return
     
+    parts = message.text.upper().split()
+    if len(parts) != 2:
+        await message.answer("❌ Неверный формат! Используйте: USD 100")
+        return
+    
+    currency = parts[0]
     try:
         amount = float(parts[1])
-        description = parts[2] if len(parts) > 2 else "Без описания"
-        
-        async with aiosqlite.connect("bot_database.db") as db:
-            await db.execute('''
-                INSERT INTO history (user_id, currency, amount, result)
-                VALUES (?, 'EXPENSE', ?, ?)
-            ''', (message.from_user.id, amount, 0))
-            await db.commit()
-        
-        await message.answer(f"✅ Добавлен расход: {amount:,.0f} ₸ ({description})")
     except:
-        await message.answer("❌ Ошибка! Используйте: /add 5000 такси")
-
-@dp.message(Command("stats"))
-async def show_expense_stats(message: types.Message):
-    async with aiosqlite.connect("bot_database.db") as db:
-        cursor = await db.execute('''
-            SELECT SUM(amount) FROM history 
-            WHERE user_id = ? AND currency = 'EXPENSE' 
-            AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
-        ''', (message.from_user.id,))
-        total = (await cursor.fetchone())[0] or 0
-        
-        cursor = await db.execute('''
-            SELECT COUNT(*) FROM history 
-            WHERE user_id = ? AND currency = 'EXPENSE'
-        ''', (message.from_user.id,))
-        count = (await cursor.fetchone())[0]
+        await message.answer("❌ Введите число!")
+        return
     
-    await message.answer(f"📊 <b>СТАТИСТИКА РАСХОДОВ</b>\n\n💰 За месяц: {total:,.0f} ₸\n📝 Всего операций: {count}", parse_mode="HTML")
-
-# ========== PREMIUM ==========
-
-@dp.message(F.text == "💎 Premium")
-async def premium_info(message: types.Message):
-    text = """
-╔══════════════════════════════╗
-║      💎 PREMIUM ПОДПИСКА    ║
-╚══════════════════════════════╝
-
-<b>Преимущества Premium:</b>
-┌─────────────────────────────────┐
-│ ✨ Неограниченная история       │
-│ ✨ Расширенные графики          │
-│ ✨ Приоритетная поддержка       │
-│ ✨ Эксклюзивные функции         │
-└─────────────────────────────────┘
-
-<b>💰 Цена:</b> 5000 игровых тенге / месяц
-
-<b>🎁 Приведи друга:</b>
-За каждого приглашённого вы получите 7 дней Premium!
-"""
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(F.text == "🔗 Рефералка")
-async def referral_link(message: types.Message):
-    bot_info = await bot.get_me()
-    link = f"https://t.me/{bot_info.username}?start=ref_{message.from_user.id}"
+    rates = await get_currency_rates()
+    if currency not in rates:
+        await message.answer(f"❌ Неизвестная валюта. Доступны: USD, EUR, RUB, CNY")
+        return
     
-    text = f"""
-╔══════════════════════════════╗
-║      🔗 РЕФЕРАЛЬНАЯ ССЫЛКА  ║
-╚══════════════════════════════╝
+    result, msg = await buy_currency_game(message.from_user.id, currency, amount, rates[currency])
+    await message.answer(msg)
+    await state.clear()
 
-<b>Ваша ссылка:</b>
-<code>{link}</code>
+@dp.message(F.text == "💸 Продать")
+async def game_sell_start(message: types.Message, state: FSMContext):
+    await state.set_state(GameState.selling)
+    await message.answer(
+        "💸 <b>Продажа валюты</b>\n\n"
+        "Напишите в формате: <code>USD 100</code>\n"
+        "Пример: USD 50\n\n"
+        "<i>/cancel - отмена</i>"
+    )
 
-<b>За каждого друга:</b>
-• +1000 игровых тенге
-• +7 дней Premium
+@dp.message(GameState.selling)
+async def game_sell(message: types.Message, state: FSMContext):
+    if message.text == "/cancel":
+        await state.clear()
+        await message.answer("❌ Отменено", reply_markup=game_menu())
+        return
+    
+    parts = message.text.upper().split()
+    if len(parts) != 2:
+        await message.answer("❌ Неверный формат! Используйте: USD 100")
+        return
+    
+    currency = parts[0]
+    try:
+        amount = float(parts[1])
+    except:
+        await message.answer("❌ Введите число!")
+        return
+    
+    rates = await get_currency_rates()
+    if currency not in rates:
+        await message.answer(f"❌ Неизвестная валюта. Доступны: USD, EUR, RUB, CNY")
+        return
+    
+    result, msg = await sell_currency_game(message.from_user.id, currency, amount, rates[currency])
+    await message.answer(msg)
+    await state.clear()
 
-Просто отправьте ссылку друзьям!
-"""
-    await message.answer(text, parse_mode="HTML")
+@dp.message(F.text == "📊 Портфель")
+async def game_portfolio(message: types.Message):
+    portfolio = await get_portfolio(message.from_user.id)
+    balance = await get_game_balance(message.from_user.id)
+    
+    if not portfolio:
+        await message.answer(f"📊 <b>Ваш портфель пуст</b>\n\n💰 Баланс: {balance} ₸")
+        return
+    
+    text = f"📊 <b>ВАШ ПОРТФЕЛЬ</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+    for curr, amt in portfolio:
+        text += f"• {curr}: {amt:.2f}\n"
+    text += f"\n💰 Баланс: {balance} ₸"
+    await message.answer(text)
 
 # ========== ИДЕИ ==========
 
-@dp.message(F.text == "💡 Предложить идею")
+@dp.message(F.text == "💡 Идея")
 async def idea_start(message: types.Message, state: FSMContext):
     await state.set_state(IdeaState.waiting_for_idea)
-    await message.answer("💭 Напишите вашу идею или предложение:\n\n/cancel - отмена", reply_markup=types.ReplyKeyboardRemove())
+    await message.answer("💭 Напишите вашу идею или предложение:\n\n/cancel - отмена")
 
 @dp.message(IdeaState.waiting_for_idea)
 async def idea_save(message: types.Message, state: FSMContext):
@@ -1046,8 +549,7 @@ async def idea_save(message: types.Message, state: FSMContext):
     try:
         await bot.send_message(
             ADMIN_ID,
-            f"📝 <b>НОВАЯ ИДЕЯ!</b>\n\n👤 {user.full_name}\n🆔 <code>{user.id}</code>\n\n💡 {message.text}",
-            parse_mode="HTML"
+            f"📝 НОВАЯ ИДЕЯ!\n\nОт: {user.full_name}\nID: {user.id}\n\n{message.text}"
         )
         await message.answer("✅ Спасибо! Идея отправлена администратору.", reply_markup=main_menu())
     except:
@@ -1055,11 +557,82 @@ async def idea_save(message: types.Message, state: FSMContext):
     
     await state.clear()
 
+# ========== ПРОФИЛЬ ==========
+
+@dp.message(F.text == "📊 Профиль")
+async def show_profile(message: types.Message):
+    user = message.from_user
+    balance = await get_game_balance(user.id)
+    history = await get_history(user.id)
+    
+    text = f"<b>👤 Профиль</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+    text += f"Имя: {user.full_name}\n"
+    text += f"ID: <code>{user.id}</code>\n"
+    text += f"🎮 Игровой баланс: {balance} ₸\n\n"
+    
+    if history:
+        text += "<b>📜 Последние операции:</b>\n"
+        for curr, amt, res, dt in history[:5]:
+            text += f"• {curr}: {amt:.2f} = {res:.2f} ₸\n"
+    else:
+        text += "📭 Нет истории конвертаций"
+    
+    await message.answer(text)
+
+# ========== ПОМОЩЬ ==========
+
+@dp.message(F.text == "❓ Помощь")
+async def cmd_help(message: types.Message):
+    help_text = """
+<b>📚 Помощь</b>
+━━━━━━━━━━━━━━━━━━━━━
+
+<b>💵 Курсы валют:</b>
+• Нажмите "Курсы валют"
+• Выберите валюту
+• Напишите сумму
+
+<b>🌍 Погода:</b>
+• Выберите страну → город
+
+<b>🎮 Экономическая игра:</b>
+• Покупайте и продавайте валюту
+• Зарабатывайте на разнице курсов
+• Команды: Купить USD 100, Продать USD 50
+
+<b>💡 Идея:</b>
+• Напишите предложение
+• Оно придёт админу
+
+<b>📊 Профиль:</b>
+• Просмотр статистики
+• История конвертаций
+
+━━━━━━━━━━━━━━━━━━━━━
+<i>Также можно написать: 100 USD</i>
+"""
+    await message.answer(help_text)
+
 # ========== НАЗАД ==========
 
 @dp.message(F.text == "🔙 Назад")
 async def back_to_main(message: types.Message):
     await message.answer("🔙 Главное меню", reply_markup=main_menu())
+
+# ========== КОНВЕРТАЦИЯ ИЗ СООБЩЕНИЯ ==========
+
+@dp.message()
+async def auto_convert(message: types.Message):
+    match = re.match(r'^(\d+(?:\.\d+)?)\s+([A-Z]{3})$', message.text.upper().strip())
+    if match:
+        amount = float(match.group(1))
+        currency = match.group(2)
+        rates = await get_currency_rates()
+        
+        if currency in rates:
+            result = amount * rates[currency]
+            await save_history(message.from_user.id, currency, amount, result)
+            await message.answer(f"💱 {amount:,.2f} {currency} = {result:,.2f} ₸")
 
 # ========== АДМИН ==========
 
@@ -1070,31 +643,10 @@ async def admin_panel(message: types.Message):
         return
     
     total = await get_total_users()
-    
-    async with aiosqlite.connect("bot_database.db") as db:
-        cursor = await db.execute("SELECT COUNT(*) FROM ideas")
-        ideas = (await cursor.fetchone())[0]
-        
-        cursor = await db.execute("SELECT SUM(balance) FROM users")
-        total_balance = (await cursor.fetchone())[0] or 0
-    
-    text = f"""
-╔══════════════════════════════╗
-║      🔐 АДМИН-ПАНЕЛЬ       ║
-╚══════════════════════════════╝
-
-👥 <b>Пользователей:</b> {total}
-💡 <b>Идей:</b> {ideas}
-💰 <b>Игровая экономика:</b> {total_balance:,.0f} ₸
-
-<b>Команды:</b>
-/ideas - посмотреть идеи
-/stats - подробная статистика
-"""
-    await message.answer(text, parse_mode="HTML")
+    await message.answer(f"🔐 <b>Админ-панель</b>\n\n👥 Пользователей: {total}\n\n/ideas - идеи")
 
 @dp.message(Command("ideas"))
-async def admin_ideas_list(message: types.Message):
+async def admin_ideas(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
     
@@ -1106,27 +658,36 @@ async def admin_ideas_list(message: types.Message):
         await message.answer("📭 Нет идей")
         return
     
-    text = "💡 <b>ПОСЛЕДНИЕ ИДЕИ</b>\n━━━━━━━━━━━━━━━━━━━━━\n"
+    text = "💡 Последние идеи:\n\n"
     for idea in ideas:
-        text += f"\n#{idea[0]} | @{idea[1] or 'anon'}\n📝 {idea[2][:100]}\n🕐 {idea[3][:16]}\n"
-    await message.answer(text, parse_mode="HTML")
+        text += f"#{idea[0]} | @{idea[1] or 'anon'}\n📝 {idea[2][:100]}\n🕐 {idea[3][:16]}\n━━━━━━━━━\n"
+    await message.answer(text)
+
+@dp.message(Command("bonus"))
+async def give_bonus(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    parts = message.text.split()
+    if len(parts) == 2:
+        user_id = int(parts[1])
+        await update_game_balance(user_id, 1000)
+        await message.answer(f"✅ Пользователю {user_id} начислено 1000 бонусов")
 
 # ========== ЗАПУСК ==========
 
 async def main():
-    print("🚀 ЗАПУСК МЕГА-БОТА С КРАСИВЫМ ДИЗАЙНОМ...")
+    print("🚀 Запуск бота...")
     await init_db()
     print("✅ База данных готова")
     await bot.delete_webhook(drop_pending_updates=True)
     me = await bot.get_me()
     print(f"✅ Бот @{me.username} запущен!")
     print("📱 ДОСТУПНЫЕ ФУНКЦИИ:")
-    print("   • Красивый дизайн с рамками")
-    print("   • Курсы валют и криптовалют")
-    print("   • Погода в 15+ городах")
+    print("   • Курсы валют и конвертация")
+    print("   • Погода в 40+ городах мира")
     print("   • Экономическая игра")
-    print("   • Викторина и гороскоп")
-    print("   • Напоминания и бюджет")
+    print("   • Отправка идей админу")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
