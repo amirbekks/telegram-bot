@@ -1,4 +1,8 @@
 aiogram
 aiohttp
-python-dotenv
 aiosqlite
+python-dotenv
+apscheduler
+pytz
+beautifulsoup4
+lxml
