@@ -53,6 +53,13 @@ def notifications_menu():
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
+def weather_forecast_menu():
+    buttons = [
+        [KeyboardButton(text="🌡️ Сейчас"), KeyboardButton(text="📅 На сегодня")],
+        [KeyboardButton(text="🔙 Назад")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
 # ========== ВСЕ СТРАНЫ И ГОРОДА ==========
 
 COUNTRIES = {
@@ -234,21 +241,145 @@ async def get_currency_rates():
         pass
     return {'USD': 485.50, 'EUR': 565.80, 'RUB': 6.85, 'CNY': 72.50}
 
-# ========== ПОГОДА ==========
+# ========== ПОГОДА (ТЕКУЩАЯ) ==========
 
-async def get_weather(city_name: str):
+async def get_current_weather(city_name: str):
     lat, lon = COORDS.get(city_name, (51.1694, 71.4491))
-    url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=ru"
+    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=ru"
+    
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 if response.status == 200:
                     data = await response.json()
-                    emoji = "☀️" if 'clear' in data['weather'][0]['main'].lower() else "☁️" if 'cloud' in data['weather'][0]['main'].lower() else "🌧"
-                    return f"{emoji} <b>{city_name}</b>\n🌡 {data['main']['temp']:.1f}°C\n💧 Влажность: {data['main']['humidity']}%\n🌬 Ветер: {data['wind']['speed']:.1f} м/с"
-    except:
-        pass
-    return f"❌ Ошибка погоды для {city_name}"
+                    
+                    # Эмодзи в зависимости от погоды
+                    weather_id = data['weather'][0]['id']
+                    if 200 <= weather_id < 300:
+                        emoji = "⛈️"
+                    elif 300 <= weather_id < 600:
+                        emoji = "🌧️"
+                    elif 600 <= weather_id < 700:
+                        emoji = "❄️"
+                    elif 700 <= weather_id < 800:
+                        emoji = "🌫️"
+                    elif weather_id == 800:
+                        emoji = "☀️"
+                    elif weather_id == 801:
+                        emoji = "🌤️"
+                    elif 802 <= weather_id < 900:
+                        emoji = "☁️"
+                    else:
+                        emoji = "🌡️"
+                    
+                    # Ветер в км/ч
+                    wind_kmh = data['wind']['speed'] * 3.6
+                    
+                    result = f"""
+{emoji} <b>{city_name}</b> — сейчас
+━━━━━━━━━━━━━━━━━━━━━
+
+🌡️ <b>Температура:</b> {data['main']['temp']:.1f}°C
+🎯 <b>Ощущается как:</b> {data['main']['feels_like']:.1f}°C
+
+💧 <b>Влажность:</b> {data['main']['humidity']}%
+🌬️ <b>Ветер:</b> {wind_kmh:.1f} км/ч
+
+📝 <b>Описание:</b> {data['weather'][0]['description'].capitalize()}
+
+━━━━━━━━━━━━━━━━━━━━━
+🕐 <i>Обновлено: {datetime.now().strftime('%H:%M:%S')}</i>
+"""
+                    return result
+                else:
+                    return f"❌ Ошибка получения погоды для {city_name}"
+    except Exception as e:
+        return f"❌ Ошибка: {str(e)[:50]}"
+
+# ========== ПРОГНОЗ НА ДЕНЬ ==========
+
+async def get_forecast(city_name: str):
+    lat, lon = COORDS.get(city_name, (51.1694, 71.4491))
+    url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=ru&cnt=8"
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    times = []
+                    temps = []
+                    rain_probs = []
+                    conditions = []
+                    
+                    for item in data['list'][:8]:  # Следующие 24 часа (каждые 3 часа)
+                        dt = datetime.fromtimestamp(item['dt'])
+                        hour = dt.strftime('%H:%M')
+                        
+                        temp = item['main']['temp']
+                        
+                        # Вероятность осадков (если есть)
+                        rain_prob = item.get('pop', 0) * 100
+                        
+                        # Условие погоды
+                        weather_id = item['weather'][0]['id']
+                        if 200 <= weather_id < 300:
+                            cond = "⛈️ Гроза"
+                        elif 300 <= weather_id < 600:
+                            cond = "🌧️ Дождь"
+                        elif 600 <= weather_id < 700:
+                            cond = "❄️ Снег"
+                        elif weather_id == 800:
+                            cond = "☀️ Ясно"
+                        elif weather_id == 801:
+                            cond = "🌤️ Малооблачно"
+                        elif 802 <= weather_id < 900:
+                            cond = "☁️ Облачно"
+                        else:
+                            cond = item['weather'][0]['description'].capitalize()
+                        
+                        times.append(hour)
+                        temps.append(temp)
+                        rain_probs.append(rain_prob)
+                        conditions.append(cond)
+                    
+                    # Формируем прогноз
+                    result = f"""
+🌤️ <b>{city_name}</b> — прогноз на сегодня
+━━━━━━━━━━━━━━━━━━━━━
+
+"""
+                    for i in range(len(times)):
+                        rain_icon = "💧" if rain_probs[i] > 0 else "☀️"
+                        result += f"<b>{times[i]}</b>  {temps[i]:.1f}°C  |  {conditions[i]}  |  {rain_icon} {rain_probs[i]:.0f}%\n"
+                    
+                    # Средняя температура
+                    avg_temp = sum(temps) / len(temps)
+                    # Максимальная вероятность осадков
+                    max_rain = max(rain_probs)
+                    # Самая жаркая и холодная температура
+                    max_temp = max(temps)
+                    min_temp = min(temps)
+                    
+                    result += f"""
+━━━━━━━━━━━━━━━━━━━━━
+📊 <b>Сводка на день:</b>
+🌡️ Средняя: {avg_temp:.1f}°C (макс {max_temp:.1f}°C / мин {min_temp:.1f}°C)
+💧 Вероятность осадков: {max_rain:.0f}%
+"""
+                    if max_rain > 50:
+                        result += "☂️ <i>Не забудьте зонт!</i>"
+                    elif max_rain > 20:
+                        result += "🌂 <i>Возможен небольшой дождь</i>"
+                    else:
+                        result += "😎 <i>Отличная погода!</i>"
+                    
+                    return result
+                else:
+                    return f"❌ Ошибка получения прогноза для {city_name}"
+    except Exception as e:
+        return f"❌ Ошибка: {str(e)[:50]}"
 
 # ========== РАССЫЛКА ==========
 
@@ -284,6 +415,10 @@ async def send_evening():
         except:
             pass
 
+# ========== ПЕРЕМЕННАЯ ДЛЯ ВЫБОРА ГОРОДА ==========
+
+selected_city = {}
+
 # ========== БОТ ==========
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
@@ -300,7 +435,7 @@ async def cmd_start(message: types.Message):
         f"👋 Привет, {user.first_name}!\n\n"
         f"🇰🇿 <b>Мой бот поможет:</b>\n"
         f"• Узнать курс валют 💵\n"
-        f"• Посмотреть погоду в 50+ городах мира 🌍\n"
+        f"• Посмотреть погоду сейчас или на сегодня 🌤️\n"
         f"• Настроить уведомления 🔔\n"
         f"• Отправить идею 💡\n\n"
         f"⬇️ <b>Выберите действие:</b>",
@@ -327,7 +462,7 @@ async def convert_start(message: types.Message, state: FSMContext):
     currency = currency_map[message.text]
     await state.update_data(currency=currency)
     await state.set_state(ConvertState.waiting_for_amount)
-    await message.answer(f"💱 <b>Конвертация {currency} → KZT</b>\n\nВведите сумму (например: 100):")
+    await message.answer(f"💱 <b>Конвертация {currency} → KZT</b>\n\nВведите сумму:")
 
 @dp.message(ConvertState.waiting_for_amount)
 async def convert_amount(message: types.Message, state: FSMContext):
@@ -346,8 +481,10 @@ async def convert_amount(message: types.Message, state: FSMContext):
             )
         await state.clear()
     except:
-        await message.answer("❌ Введите число! Например: 100", reply_markup=currency_menu())
+        await message.answer("❌ Введите число!", reply_markup=currency_menu())
         await state.clear()
+
+# ========== ПОГОДА ==========
 
 @dp.message(F.text == "🌍 Погода")
 async def weather_countries(message: types.Message):
@@ -359,13 +496,38 @@ async def show_cities(message: types.Message):
     cities = COUNTRIES[country]
     buttons = [[KeyboardButton(text=city)] for city in cities]
     buttons.append([KeyboardButton(text="🔙 Назад")])
-    await message.answer(f"🏙 <b>Города {country}:</b>", reply_markup=ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True))
+    await message.answer(f"🏙 <b>Города {country}:</b>\n\nВыберите город, затем что хотите посмотреть:", reply_markup=ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True))
 
 @dp.message(F.text.in_(COORDS.keys()))
-async def get_weather_city(message: types.Message):
+async def city_selected(message: types.Message):
+    city = message.text
+    selected_city[message.from_user.id] = city
+    await message.answer(
+        f"🏙️ <b>{city}</b>\n\nЧто хотите узнать?",
+        reply_markup=weather_forecast_menu()
+    )
+
+@dp.message(F.text == "🌡️ Сейчас")
+async def get_current(message: types.Message):
+    city = selected_city.get(message.from_user.id)
+    if not city:
+        await message.answer("❌ Пожалуйста, выберите город сначала через кнопку '🌍 Погода'")
+        return
+    
     await message.bot.send_chat_action(message.chat.id, "typing")
-    weather = await get_weather(message.text)
+    weather = await get_current_weather(city)
     await message.answer(weather, parse_mode="HTML")
+
+@dp.message(F.text == "📅 На сегодня")
+async def get_today_forecast(message: types.Message):
+    city = selected_city.get(message.from_user.id)
+    if not city:
+        await message.answer("❌ Пожалуйста, выберите город сначала через кнопку '🌍 Погода'")
+        return
+    
+    await message.bot.send_chat_action(message.chat.id, "typing")
+    forecast = await get_forecast(city)
+    await message.answer(forecast, parse_mode="HTML")
 
 @dp.message(F.text == "🔔 Уведомления")
 async def notifications_menu_handler(message: types.Message):
@@ -421,12 +583,12 @@ async def cmd_help(message: types.Message):
         "<b>📚 ПОМОЩЬ</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
         "<b>💵 Курсы валют:</b>\n"
         "• Выберите валюту → напишите сумму\n\n"
-        "<b>🌍 Погода:</b>\n"
+        "<b>🌤️ Погода:</b>\n"
         "• Выберите страну → город\n"
-        "• Доступны: Казахстан, Китай, Кыргызстан, Таиланд, Турция, ОАЭ, Египет, Индия (50+ городов)\n\n"
+        "• Затем выберите: 'Сейчас' или 'На сегодня'\n"
+        "• Прогноз показывает температуру и ВЕРОЯТНОСТЬ ОСАДКОВ на 24 часа\n\n"
         "<b>🔔 Уведомления:</b>\n"
-        "• Включите утренние (9:00) и/или вечерние (19:00)\n"
-        "• Каждый день будет приходить курс валют\n\n"
+        "• Включите утренние (9:00) и/или вечерние (19:00)\n\n"
         "<b>💡 Идея:</b>\n"
         "• Напишите предложение\n\n"
         "<i>Также можно написать: 100 USD</i>"
@@ -459,7 +621,7 @@ async def admin_panel(message: types.Message):
 # ========== ЗАПУСК ==========
 
 async def main():
-    print("🚀 Запуск бота...")
+    print("🚀 Запуск бота с расширенной погодой...")
     await init_db()
     print("✅ База данных готова")
     
@@ -471,6 +633,7 @@ async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     me = await bot.get_me()
     print(f"✅ Бот @{me.username} запущен!")
+    print("🌤️ Функции погоды: текущая + прогноз на 24 часа с вероятностью осадков")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
