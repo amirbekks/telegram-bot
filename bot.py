@@ -2,6 +2,7 @@ import asyncio
 import aiosqlite
 import aiohttp
 import re
+import json
 from datetime import datetime
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
@@ -18,6 +19,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 WEATHERAPI_KEY = os.getenv('WEATHERAPI_KEY')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')  # Добавь в Railway Variables
 
 # ========== СОСТОЯНИЯ ==========
 class ConvertState(StatesGroup):
@@ -30,12 +32,15 @@ class BanState(StatesGroup):
     waiting_for_user_id = State()
     waiting_for_reason = State()
 
+class AiState(StatesGroup):
+    waiting_for_question = State()
+
 # ========== КЛАВИАТУРЫ ==========
 
 def main_menu():
     buttons = [
         [KeyboardButton(text="💵 Курсы валют")],
-        [KeyboardButton(text="🌍 Погода")],
+        [KeyboardButton(text="🌍 Погода"), KeyboardButton(text="🤖 ИИ помощник")],
         [KeyboardButton(text="🔔 Уведомления")],
         [KeyboardButton(text="💡 Предложить идею")],
         [KeyboardButton(text="❓ Помощь")]
@@ -50,15 +55,6 @@ def currency_menu():
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
-def admin_menu():
-    buttons = [
-        [KeyboardButton(text="👥 Список пользователей"), KeyboardButton(text="📊 Статистика")],
-        [KeyboardButton(text="🚫 Забанить"), KeyboardButton(text="✅ Разбанить")],
-        [KeyboardButton(text="📢 Рассылка"), KeyboardButton(text="💡 Идеи")],
-        [KeyboardButton(text="🔙 Главное меню")]
-    ]
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-
 def notifications_menu():
     buttons = [
         [KeyboardButton(text="🌅 Утро 9:00"), KeyboardButton(text="🌙 Вечер 19:00")],
@@ -70,6 +66,15 @@ def weather_forecast_menu():
     buttons = [
         [KeyboardButton(text="🌡️ Сейчас"), KeyboardButton(text="📅 Почасовой прогноз")],
         [KeyboardButton(text="🔙 Назад")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+def admin_menu():
+    buttons = [
+        [KeyboardButton(text="👥 Список пользователей"), KeyboardButton(text="📊 Статистика")],
+        [KeyboardButton(text="🚫 Забанить"), KeyboardButton(text="✅ Разбанить")],
+        [KeyboardButton(text="📢 Рассылка"), KeyboardButton(text="💡 Идеи")],
+        [KeyboardButton(text="🔙 Главное меню")]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
@@ -198,6 +203,33 @@ async def get_hourly_forecast(city_name: str):
     except:
         return f"❌ Ошибка прогноза"
 
+# ========== ИИ ПОМОЩНИК ==========
+
+async def ask_ai(question: str):
+    if not OPENAI_API_KEY:
+        return "🤖 ИИ помощник временно недоступен. API ключ не настроен.\n\nДобавьте OPENAI_API_KEY в переменные Railway."
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": "gpt-3.5-turbo",
+                "messages": [{"role": "user", "content": question}],
+                "max_tokens": 500,
+                "temperature": 0.7
+            }
+            async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return result['choices'][0]['message']['content']
+                else:
+                    return f"❌ Ошибка API: {response.status}"
+    except Exception as e:
+        return f"❌ Ошибка: {str(e)[:100]}"
+
 # ========== БАЗА ДАННЫХ ==========
 
 async def init_db():
@@ -271,6 +303,14 @@ async def ban_user(user_id: int, reason: str):
 async def unban_user(user_id: int):
     async with aiosqlite.connect("bot_database.db") as db:
         await db.execute("UPDATE users SET is_banned = 0, ban_reason = NULL WHERE user_id = ?", (user_id,))
+        await db.commit()
+
+async def save_history(user_id: int, currency: str, amount: float, result: float):
+    async with aiosqlite.connect("bot_database.db") as db:
+        await db.execute('''
+            INSERT INTO history (user_id, currency, amount, result)
+            VALUES (?, ?, ?, ?)
+        ''', (user_id, currency, amount, result))
         await db.commit()
 
 async def save_idea(user_id: int, username: str, idea_text: str):
@@ -354,7 +394,11 @@ async def start_cmd(message: types.Message):
     await message.answer(
         f"👋 Привет, {user.first_name}!\n\n"
         f"🇰🇿 <b>Мой бот поможет:</b>\n"
-        f"• Курсы валют 💵\n• Погода 🌤️\n• Уведомления 🔔\n• Идеи 💡\n\n"
+        f"• Курсы валют 💵\n"
+        f"• Погода 🌤️\n"
+        f"• ИИ помощник 🤖\n"
+        f"• Уведомления 🔔\n"
+        f"• Идеи 💡\n\n"
         f"⬇️ Выберите действие:",
         reply_markup=main_menu()
     )
@@ -443,6 +487,40 @@ async def get_hour(message: types.Message):
     f = await get_hourly_forecast(city)
     await message.answer(f)
 
+# ========== ИИ ПОМОЩНИК ==========
+
+@dp.message(F.text == "🤖 ИИ помощник")
+async def ai_start(message: types.Message, state: FSMContext):
+    if await is_banned(message.from_user.id):
+        return
+    await state.set_state(AiState.waiting_for_question)
+    await message.answer(
+        "🤖 <b>ИИ помощник</b>\n\n"
+        "Задайте любой вопрос. Я постараюсь помочь!\n"
+        "Примеры:\n"
+        "• Какой курс доллара?\n"
+        "• Что такое тенге?\n"
+        "• Какая погода в Алматы?\n\n"
+        "<i>/cancel - отмена</i>",
+        parse_mode="HTML"
+    )
+
+@dp.message(AiState.waiting_for_question)
+async def ai_ask(message: types.Message, state: FSMContext):
+    if await is_banned(message.from_user.id):
+        return
+    if message.text == "/cancel":
+        await state.clear()
+        await message.answer("❌ Отменено", reply_markup=main_menu())
+        return
+    
+    await message.bot.send_chat_action(message.chat.id, "typing")
+    response = await ask_ai(message.text)
+    await message.answer(response, parse_mode="HTML")
+    await state.clear()
+
+# ========== УВЕДОМЛЕНИЯ ==========
+
 @dp.message(F.text == "🔔 Уведомления")
 async def notify_menu(message: types.Message):
     if await is_banned(message.from_user.id):
@@ -476,6 +554,8 @@ async def disable_notify(message: types.Message):
     await update_notify(message.from_user.id, morning=False, evening=False)
     await message.answer("✅ Все уведомления отключены!")
 
+# ========== ИДЕИ ==========
+
 @dp.message(F.text == "💡 Предложить идею")
 async def idea_start(message: types.Message, state: FSMContext):
     if await is_banned(message.from_user.id):
@@ -503,6 +583,7 @@ async def help_cmd(message: types.Message):
         "<b>📚 ПОМОЩЬ</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
         "<b>💵 Курсы:</b> Выберите валюту → напишите сумму\n"
         "<b>🌤️ Погода:</b> Страна → город → 'Сейчас' или 'Почасовой'\n"
+        "<b>🤖 ИИ помощник:</b> Задайте любой вопрос\n"
         "<b>🔔 Уведомления:</b> Включите утро/вечер\n"
         "<b>💡 Идеи:</b> Напишите предложение\n\n"
         "<i>Напишите: 100 USD</i>"
@@ -695,7 +776,7 @@ async def send_evening():
 # ========== ЗАПУСК ==========
 
 async def main():
-    print("🚀 Запуск бота...")
+    print("🚀 Запуск бота с админ-панелью и ИИ...")
     await init_db()
     print("✅ База данных готова")
     
@@ -709,6 +790,7 @@ async def main():
     me = await bot.get_me()
     print(f"✅ Бот @{me.username} запущен!")
     print("🔐 Админ-панель: /admin")
+    print("🤖 ИИ помощник: кнопка '🤖 ИИ помощник'")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
