@@ -19,6 +19,10 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 WEATHERAPI_KEY = os.getenv('WEATHERAPI_KEY')
 
+# ПРОВЕРКА ПЕРЕМЕННЫХ
+print(f"🔐 ADMIN_ID = {ADMIN_ID}")
+print(f"🤖 BOT_TOKEN = {BOT_TOKEN[:20] if BOT_TOKEN else 'None'}...")
+
 # ========== СОСТОЯНИЯ ==========
 class ConvertState(StatesGroup):
     waiting_for_amount = State()
@@ -38,7 +42,7 @@ def main_menu():
         [KeyboardButton(text="🌍 Погода")],
         [KeyboardButton(text="🔔 Уведомления")],
         [KeyboardButton(text="💡 Предложить идею")],
-        [KeyboardButton(text="❓ Помощь")]
+        [KeyboardButton(text="❓ Помощить")]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
@@ -274,8 +278,6 @@ dp = Dispatcher()
 scheduler = AsyncIOScheduler()
 selected_city = {}
 
-# ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ПРОВЕРКИ БАНА ==========
-
 async def check_ban(user_id: int) -> bool:
     return await is_banned(user_id)
 
@@ -401,14 +403,14 @@ async def enable_morn(message: types.Message):
     if await check_ban(message.from_user.id):
         return
     await update_notify(message.from_user.id, morning=True)
-    await message.answer("✅ Утренние уведомления включены! В 9:00 будет приходить курс валют.")
+    await message.answer("✅ Утренние уведомления включены!")
 
 @dp.message(F.text == "🌙 Вечер 19:00")
 async def enable_eve(message: types.Message):
     if await check_ban(message.from_user.id):
         return
     await update_notify(message.from_user.id, evening=True)
-    await message.answer("✅ Вечерние уведомления включены! В 19:00 будет приходить курс валют.")
+    await message.answer("✅ Вечерние уведомления включены!")
 
 @dp.message(F.text == "🔕 Отключить всё")
 async def disable_notify(message: types.Message):
@@ -422,7 +424,7 @@ async def idea_start(message: types.Message, state: FSMContext):
     if await check_ban(message.from_user.id):
         return
     await state.set_state(IdeaState.waiting_for_idea)
-    await message.answer("💭 Напишите вашу идею для улучшения бота:\n\n/cancel - отмена")
+    await message.answer("💭 Напишите вашу идею:\n\n/cancel - отмена")
 
 @dp.message(IdeaState.waiting_for_idea)
 async def idea_save(message: types.Message, state: FSMContext):
@@ -446,11 +448,11 @@ async def help_cmd(message: types.Message):
         return
     await message.answer(
         "<b>📚 ПОМОЩЬ</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "<b>💵 Курсы валют:</b>\n• Выберите валюту → напишите сумму\n\n"
-        "<b>🌍 Погода:</b>\n• Выберите страну → город → 'Сейчас' или 'Почасовой прогноз'\n\n"
-        "<b>🔔 Уведомления:</b>\n• Включите утренние (9:00) и/или вечерние (19:00)\n\n"
-        "<b>💡 Идеи:</b>\n• Напишите предложение по улучшению бота\n\n"
-        "<i>Также можно написать: 100 USD</i>"
+        "<b>💵 Курсы:</b> Выберите валюту → напишите сумму\n"
+        "<b>🌤️ Погода:</b> Страна → город\n"
+        "<b>🔔 Уведомления:</b> Включите утро/вечер\n"
+        "<b>💡 Идеи:</b> Напишите предложение\n\n"
+        "<i>Напишите: 100 USD</i>"
     )
 
 @dp.message(F.text == "🔙 Назад")
@@ -476,9 +478,13 @@ async def auto_convert(message: types.Message):
 
 @dp.message(Command("admin"))
 async def admin_panel(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        await message.answer("⛔ Доступ запрещен")
+    user_id = message.from_user.id
+    print(f"🔐 Пользователь {user_id} вызывает /admin. ADMIN_ID = {ADMIN_ID}")
+    
+    if user_id != ADMIN_ID:
+        await message.answer(f"⛔ Доступ запрещен!\n\nВаш ID: `{user_id}`\nID администратора: `{ADMIN_ID}`", parse_mode="HTML")
         return
+    
     total = await get_total_users()
     banned = await get_banned_count()
     await message.answer(
@@ -496,7 +502,7 @@ async def list_users(message: types.Message):
     users = await get_all_users()
     total = await get_total_users()
     banned = await get_banned_count()
-    text = f"👥 <b>ВСЕ ПОЛЬЗОВАТЕЛИ</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n✅ Активных: {total}\n🚫 Забанено: {banned}\n📊 Всего: {len(users)}\n\n"
+    text = f"👥 <b>ПОЛЬЗОВАТЕЛИ</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n✅ Активных: {total}\n🚫 Забанено: {banned}\n📊 Всего: {len(users)}\n\n"
     for u in users[:20]:
         uid, uname, fname, reg, banned_flag = u
         status = "❌ ЗАБАНЕН" if banned_flag else "✅ АКТИВЕН"
@@ -513,11 +519,10 @@ async def stats_admin(message: types.Message):
         cursor = await db.execute("SELECT COUNT(*) FROM ideas")
         ideas = (await cursor.fetchone())[0]
     await message.answer(
-        f"📊 <b>СТАТИСТИКА БОТА</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"👥 Активных пользователей: {total}\n"
-        f"🚫 Забаненных: {banned}\n"
-        f"💡 Идей получено: {ideas}\n\n"
-        f"📈 Бот работает 24/7",
+        f"📊 <b>СТАТИСТИКА</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👥 Пользователей: {total}\n"
+        f"🚫 Забанено: {banned}\n"
+        f"💡 Идей: {ideas}",
         parse_mode="HTML"
     )
 
@@ -538,7 +543,7 @@ async def ban_get_id(message: types.Message, state: FSMContext):
         await state.set_state(BanState.waiting_for_reason)
         await message.answer("📝 Введите причину бана:")
     except:
-        await message.answer("❌ Неверный ID! Введите число.")
+        await message.answer("❌ Неверный ID!")
 
 @dp.message(BanState.waiting_for_reason)
 async def ban_do(message: types.Message, state: FSMContext):
@@ -549,10 +554,10 @@ async def ban_do(message: types.Message, state: FSMContext):
     reason = message.text
     await ban_user(uid, reason)
     try:
-        await bot.send_message(uid, f"🚫 <b>Вас заблокировали!</b>\n\nПричина: {reason}", parse_mode="HTML")
+        await bot.send_message(uid, f"🚫 Вы забанены!\nПричина: {reason}")
     except:
         pass
-    await message.answer(f"✅ Пользователь <code>{uid}</code> ЗАБАНЕН!\nПричина: {reason}", parse_mode="HTML")
+    await message.answer(f"✅ Пользователь {uid} ЗАБАНЕН!")
     await state.clear()
 
 @dp.message(F.text == "✅ Разбанить")
@@ -569,10 +574,10 @@ async def unban_start(message: types.Message):
             uid = int(msg.text)
             await unban_user(uid)
             try:
-                await bot.send_message(uid, "✅ <b>Вас разблокировали!</b>\n\nТеперь вы снова можете пользоваться ботом.", parse_mode="HTML")
+                await bot.send_message(uid, "✅ Вы разблокированы!")
             except:
                 pass
-            await msg.answer(f"✅ Пользователь <code>{uid}</code> РАЗБАНЕН!", parse_mode="HTML")
+            await msg.answer(f"✅ Пользователь {uid} РАЗБАНЕН!")
             dp.message.handlers.remove(unban_do)
         except:
             await msg.answer("❌ Неверный ID!")
@@ -581,27 +586,22 @@ async def unban_start(message: types.Message):
 async def broadcast_start(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
-    await message.answer("📢 Введите текст для рассылки ВСЕМ пользователям:\n\n/cancel - отмена")
+    await message.answer("📢 Введите текст для рассылки:")
 
     @dp.message()
     async def broadcast_send(msg: types.Message):
         if msg.from_user.id != ADMIN_ID:
             return
-        if msg.text == "/cancel":
-            await msg.answer("❌ Рассылка отменена")
-            dp.message.handlers.remove(broadcast_send)
-            return
         users = await get_unbanned_users()
         success = 0
-        await msg.answer(f"📤 Начинаю рассылку для {len(users)} пользователей...")
         for uid in users:
             try:
-                await bot.send_message(uid, f"📢 <b>РАССЫЛКА ОТ АДМИНА</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n{msg.text}", parse_mode="HTML")
+                await bot.send_message(uid, f"📢 РАССЫЛКА\n\n{msg.text}")
                 success += 1
                 await asyncio.sleep(0.05)
             except:
                 pass
-        await msg.answer(f"✅ Рассылка завершена! Отправлено: {success} пользователям")
+        await msg.answer(f"✅ Отправлено: {success} пользователям")
         dp.message.handlers.remove(broadcast_send)
 
 @dp.message(F.text == "💡 Идеи")
@@ -610,11 +610,11 @@ async def ideas_admin(message: types.Message):
         return
     ideas = await get_all_ideas()
     if not ideas:
-        await message.answer("📭 Нет идей от пользователей")
+        await message.answer("📭 Нет идей")
         return
-    text = "💡 <b>ИДЕИ ПОЛЬЗОВАТЕЛЕЙ</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+    text = "💡 <b>ИДЕИ</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
     for idea in ideas:
-        text += f"👤 @{idea[1] or 'anon'}\n📝 {idea[2][:150]}\n🕐 {idea[3][:16]}\n━━━━━━━━━━━━━━━━━━━━━\n"
+        text += f"👤 @{idea[1] or 'anon'}\n📝 {idea[2][:100]}\n🕐 {idea[3][:16]}\n━━━━━━━━━━━━━━━━━━━━━\n"
     await message.answer(text, parse_mode="HTML")
 
 @dp.message(F.text == "🔙 Главное меню")
@@ -628,26 +628,22 @@ async def back_admin(message: types.Message):
 async def send_morning():
     users = await get_subscribed()
     rates = await get_currency_rates()
-    text = f"🌅 <b>Доброе утро!</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n<b>💰 Курсы валют:</b>\n"
-    for curr, rate in rates.items():
-        text += f"{curr}: {rate:.2f} ₸\n"
+    text = f"🌅 Доброе утро!\n\n💰 Курсы:\n" + "\n".join([f"{k}: {v:.2f} ₸" for k, v in rates.items()])
     for uid in users:
         if not await is_banned(uid):
             try:
-                await bot.send_message(uid, text, parse_mode="HTML")
+                await bot.send_message(uid, text)
             except:
                 pass
 
 async def send_evening():
     users = await get_subscribed()
     rates = await get_currency_rates()
-    text = f"🌙 <b>Вечерний дайджест</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n<b>💰 Курсы валют:</b>\n"
-    for curr, rate in rates.items():
-        text += f"{curr}: {rate:.2f} ₸\n"
+    text = f"🌙 Вечерний дайджест\n\n💰 Курсы:\n" + "\n".join([f"{k}: {v:.2f} ₸" for k, v in rates.items()])
     for uid in users:
         if not await is_banned(uid):
             try:
-                await bot.send_message(uid, text, parse_mode="HTML")
+                await bot.send_message(uid, text)
             except:
                 pass
 
@@ -658,7 +654,8 @@ async def update_rates_job():
 # ========== ЗАПУСК ==========
 
 async def main():
-    print("🚀 Запуск бота с админ-панелью...")
+    print("🚀 Запуск бота...")
+    print(f"🔐 ADMIN_ID = {ADMIN_ID}")
     await init_db()
     print("✅ База данных готова")
     
@@ -666,7 +663,7 @@ async def main():
     scheduler.add_job(send_morning, 'cron', hour=9, minute=0)
     scheduler.add_job(send_evening, 'cron', hour=19, minute=0)
     scheduler.start()
-    print("✅ Планировщик запущен (9:00 и 19:00)")
+    print("✅ Планировщик запущен")
     
     await bot.delete_webhook(drop_pending_updates=True)
     me = await bot.get_me()
