@@ -274,19 +274,17 @@ dp = Dispatcher()
 scheduler = AsyncIOScheduler()
 selected_city = {}
 
-# ========== ЗАЩИТА ОТ БАНА ==========
+# ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ПРОВЕРКИ БАНА ==========
 
-@dp.message()
-async def check_ban(message: types.Message):
-    if await is_banned(message.from_user.id):
-        await message.answer("🚫 Вы забанены!")
-        return
+async def check_ban(user_id: int) -> bool:
+    return await is_banned(user_id)
 
 # ========== ОБЫЧНЫЕ КОМАНДЫ ==========
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
+        await message.answer("🚫 Вы забанены!")
         return
     user = message.from_user
     await add_user(user.id, user.username, user.full_name)
@@ -303,7 +301,7 @@ async def cmd_start(message: types.Message):
 
 @dp.message(F.text == "💵 Курсы валют")
 async def show_rates(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     rates = await get_currency_rates()
     text = f"<b>💵 КУРСЫ ВАЛЮТ</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -316,7 +314,7 @@ async def show_rates(message: types.Message):
 
 @dp.message(F.text.in_(["🇺🇸 USD → KZT", "🇪🇺 EUR → KZT", "🇷🇺 RUB → KZT", "🇨🇳 CNY → KZT"]))
 async def convert_start(message: types.Message, state: FSMContext):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     m = {"🇺🇸 USD → KZT": "USD", "🇪🇺 EUR → KZT": "EUR", "🇷🇺 RUB → KZT": "RUB", "🇨🇳 CNY → KZT": "CNY"}
     await state.update_data(currency=m[message.text])
@@ -325,7 +323,7 @@ async def convert_start(message: types.Message, state: FSMContext):
 
 @dp.message(ConvertState.waiting_for_amount)
 async def convert_do(message: types.Message, state: FSMContext):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     try:
         amt = float(message.text.replace(",", "."))
@@ -342,13 +340,13 @@ async def convert_do(message: types.Message, state: FSMContext):
 
 @dp.message(F.text == "🌍 Погода")
 async def weather_country(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     await message.answer("🌍 Выберите страну:", reply_markup=weather_countries_menu())
 
 @dp.message(F.text.in_(COUNTRIES.keys()))
 async def show_city_list(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     cities = COUNTRIES[message.text]
     buttons = [[KeyboardButton(text=c)] for c in cities]
@@ -357,14 +355,14 @@ async def show_city_list(message: types.Message):
 
 @dp.message(F.text.in_(CITY_ENGLISH.keys()))
 async def city_choose(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     selected_city[message.from_user.id] = message.text
     await message.answer(f"🏙️ {message.text}\n\nЧто хотите узнать?", reply_markup=weather_forecast_menu())
 
 @dp.message(F.text == "🌡️ Сейчас")
 async def get_now(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     city = selected_city.get(message.from_user.id)
     if not city:
@@ -376,7 +374,7 @@ async def get_now(message: types.Message):
 
 @dp.message(F.text == "📅 Почасовой прогноз")
 async def get_hour(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     city = selected_city.get(message.from_user.id)
     if not city:
@@ -388,7 +386,7 @@ async def get_hour(message: types.Message):
 
 @dp.message(F.text == "🔔 Уведомления")
 async def notify_menu(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     s = await get_notify_settings(message.from_user.id)
     await message.answer(
@@ -400,35 +398,35 @@ async def notify_menu(message: types.Message):
 
 @dp.message(F.text == "🌅 Утро 9:00")
 async def enable_morn(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     await update_notify(message.from_user.id, morning=True)
     await message.answer("✅ Утренние уведомления включены! В 9:00 будет приходить курс валют.")
 
 @dp.message(F.text == "🌙 Вечер 19:00")
 async def enable_eve(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     await update_notify(message.from_user.id, evening=True)
     await message.answer("✅ Вечерние уведомления включены! В 19:00 будет приходить курс валют.")
 
 @dp.message(F.text == "🔕 Отключить всё")
 async def disable_notify(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     await update_notify(message.from_user.id, morning=False, evening=False)
     await message.answer("✅ Все уведомления отключены!")
 
 @dp.message(F.text == "💡 Предложить идею")
 async def idea_start(message: types.Message, state: FSMContext):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     await state.set_state(IdeaState.waiting_for_idea)
     await message.answer("💭 Напишите вашу идею для улучшения бота:\n\n/cancel - отмена")
 
 @dp.message(IdeaState.waiting_for_idea)
 async def idea_save(message: types.Message, state: FSMContext):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     if message.text == "/cancel":
         await state.clear()
@@ -444,7 +442,7 @@ async def idea_save(message: types.Message, state: FSMContext):
 
 @dp.message(F.text == "❓ Помощь")
 async def help_cmd(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     await message.answer(
         "<b>📚 ПОМОЩЬ</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -457,13 +455,13 @@ async def help_cmd(message: types.Message):
 
 @dp.message(F.text == "🔙 Назад")
 async def back(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     await message.answer("🔙 Главное меню", reply_markup=main_menu())
 
 @dp.message()
 async def auto_convert(message: types.Message):
-    if await is_banned(message.from_user.id):
+    if await check_ban(message.from_user.id):
         return
     m = re.match(r'^(\d+(?:\.\d+)?)\s+([A-Z]{3})$', message.text.upper().strip())
     if m:
