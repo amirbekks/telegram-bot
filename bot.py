@@ -10,7 +10,6 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.client.default import DefaultBotProperties
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from anthropic import AsyncAnthropic
 import os
 from dotenv import load_dotenv
 
@@ -19,10 +18,8 @@ load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 WEATHERAPI_KEY = os.getenv('WEATHERAPI_KEY')
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
-ai_client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-
+# ПРОВЕРКА ПЕРЕМЕННЫХ
 print(f"🔐 ADMIN_ID = {ADMIN_ID}")
 print(f"🤖 BOT_TOKEN = {BOT_TOKEN[:20] if BOT_TOKEN else 'None'}...")
 
@@ -37,15 +34,6 @@ class BanState(StatesGroup):
     waiting_for_user_id = State()
     waiting_for_reason = State()
 
-class UnbanState(StatesGroup):
-    waiting_for_user_id = State()
-
-class BroadcastState(StatesGroup):
-    waiting_for_text = State()
-
-class AIState(StatesGroup):
-    chatting = State()
-
 # ========== КЛАВИАТУРЫ ==========
 
 def main_menu():
@@ -53,9 +41,8 @@ def main_menu():
         [KeyboardButton(text="💵 Курсы валют")],
         [KeyboardButton(text="🌍 Погода")],
         [KeyboardButton(text="🔔 Уведомления")],
-        [KeyboardButton(text="🤖 ИИ-помощник")],
         [KeyboardButton(text="💡 Предложить идею")],
-        [KeyboardButton(text="❓ Помощь")]
+        [KeyboardButton(text="❓ Помощить")]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
@@ -150,7 +137,6 @@ async def get_current_weather(city_name: str):
 """
     except:
         return f"❌ Ошибка погоды для {city_name}"
-    return f"❌ Ошибка погоды для {city_name}"
 
 async def get_hourly_forecast(city_name: str):
     city_en = CITY_ENGLISH.get(city_name, city_name)
@@ -170,7 +156,6 @@ async def get_hourly_forecast(city_name: str):
                     return result
     except:
         return f"❌ Ошибка прогноза"
-    return f"❌ Ошибка прогноза"
 
 # ========== БАЗА ДАННЫХ ==========
 
@@ -296,21 +281,6 @@ selected_city = {}
 async def check_ban(user_id: int) -> bool:
     return await is_banned(user_id)
 
-# ========== ИИ-ПОМОЩНИК ==========
-
-AI_SYSTEM_PROMPT = """Ты — ИИ-помощник Telegram-бота для жителей Казахстана.
-
-Бот умеет:
-- Показывать курсы валют (USD/EUR/RUB/CNY к KZT) — кнопка "💵 Курсы валют"
-- Конвертировать валюту — выбрать валюту в меню "Курсы валют" и ввести сумму, или написать сообщение вида "100 USD"
-- Показывать погоду по городам: Астана, Алматы, Шымкент, Көкшетау, Пекин, Шанхай, Стамбул, Анталья, Бангкок, Пхукет — кнопка "🌍 Погода"
-- Почасовой прогноз погоды
-- Уведомления утром (9:00) и вечером (19:00) с курсами валют — кнопка "🔔 Уведомления"
-- Принимать идеи пользователей — кнопка "💡 Предложить идею"
-
-Если пользователь спрашивает про курс валют, погоду или другие функции бота — объясни, какой кнопкой это сделать.
-Отвечай кратко, дружелюбно, на русском языке (или на языке пользователя)."""
-
 # ========== ОБЫЧНЫЕ КОМАНДЫ ==========
 
 @dp.message(CommandStart())
@@ -326,7 +296,6 @@ async def cmd_start(message: types.Message):
         f"• Курсы валют 💵\n"
         f"• Погода 🌍\n"
         f"• Уведомления 🔔\n"
-        f"• ИИ-помощник 🤖\n"
         f"• Идеи 💡\n\n"
         f"⬇️ Выберите действие:",
         reply_markup=main_menu()
@@ -401,7 +370,7 @@ async def get_now(message: types.Message):
     if not city:
         await message.answer("❌ Сначала выберите город")
         return
-    await bot.send_chat_action(message.chat.id, "typing")
+    await message.bot.send_chat_action(message.chat.id, "typing")
     w = await get_current_weather(city)
     await message.answer(w)
 
@@ -413,7 +382,7 @@ async def get_hour(message: types.Message):
     if not city:
         await message.answer("❌ Сначала выберите город")
         return
-    await bot.send_chat_action(message.chat.id, "typing")
+    await message.bot.send_chat_action(message.chat.id, "typing")
     f = await get_hourly_forecast(city)
     await message.answer(f)
 
@@ -473,50 +442,6 @@ async def idea_save(message: types.Message, state: FSMContext):
         await message.answer("✅ Спасибо! Идея сохранена.", reply_markup=main_menu())
     await state.clear()
 
-# ========== ИИ-ПОМОЩНИК ХЕНДЛЕРЫ ==========
-
-@dp.message(F.text == "🤖 ИИ-помощник")
-async def ai_start(message: types.Message, state: FSMContext):
-    if await check_ban(message.from_user.id):
-        return
-    await state.set_state(AIState.chatting)
-    await message.answer(
-        "🤖 <b>ИИ-помощник</b>\n\n"
-        "Спросите меня о курсах валют, погоде, функциях бота или о чём угодно ещё!\n\n"
-        "/cancel — выйти из режима ИИ"
-    )
-
-@dp.message(AIState.chatting, Command("cancel"))
-async def ai_cancel(message: types.Message, state: FSMContext):
-    await state.clear()
-    await message.answer("👋 Вышли из режима ИИ", reply_markup=main_menu())
-
-@dp.message(AIState.chatting)
-async def ai_chat(message: types.Message, state: FSMContext):
-    if await check_ban(message.from_user.id):
-        return
-
-    await bot.send_chat_action(message.chat.id, "typing")
-    try:
-        # Если ИИ может пригодиться текущий контекст (курсы/погода), можно добавить динамические данные
-        context_info = ""
-        if any(word in message.text.lower() for word in ["курс", "доллар", "евро", "рубл", "юан"]):
-            rates = await get_currency_rates()
-            context_info = f"\n\nТекущие курсы (к KZT): USD={rates['USD']:.2f}, EUR={rates['EUR']:.2f}, RUB={rates['RUB']:.2f}, CNY={rates['CNY']:.2f}"
-
-        resp = await ai_client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=600,
-            system=AI_SYSTEM_PROMPT + context_info,
-            messages=[{"role": "user", "content": message.text}]
-        )
-        answer = "".join(b.text for b in resp.content if b.type == "text")
-        if not answer:
-            answer = "❌ Не удалось получить ответ от ИИ."
-        await message.answer(answer)
-    except Exception as e:
-        await message.answer(f"❌ Ошибка ИИ: {e}")
-
 @dp.message(F.text == "❓ Помощь")
 async def help_cmd(message: types.Message):
     if await check_ban(message.from_user.id):
@@ -526,7 +451,6 @@ async def help_cmd(message: types.Message):
         "<b>💵 Курсы:</b> Выберите валюту → напишите сумму\n"
         "<b>🌤️ Погода:</b> Страна → город\n"
         "<b>🔔 Уведомления:</b> Включите утро/вечер\n"
-        "<b>🤖 ИИ-помощник:</b> Задайте любой вопрос\n"
         "<b>💡 Идеи:</b> Напишите предложение\n\n"
         "<i>Напишите: 100 USD</i>"
     )
@@ -556,11 +480,11 @@ async def auto_convert(message: types.Message):
 async def admin_panel(message: types.Message):
     user_id = message.from_user.id
     print(f"🔐 Пользователь {user_id} вызывает /admin. ADMIN_ID = {ADMIN_ID}")
-
+    
     if user_id != ADMIN_ID:
-        await message.answer(f"⛔ Доступ запрещен!\n\nВаш ID: <code>{user_id}</code>\nID администратора: <code>{ADMIN_ID}</code>")
+        await message.answer(f"⛔ Доступ запрещен!\n\nВаш ID: `{user_id}`\nID администратора: `{ADMIN_ID}`", parse_mode="HTML")
         return
-
+    
     total = await get_total_users()
     banned = await get_banned_count()
     await message.answer(
@@ -583,7 +507,7 @@ async def list_users(message: types.Message):
         uid, uname, fname, reg, banned_flag = u
         status = "❌ ЗАБАНЕН" if banned_flag else "✅ АКТИВЕН"
         text += f"\n🆔 <code>{uid}</code> | {status}\n👤 {fname}\n📅 {reg[:16]}\n━━━━━━━━━━━━━━━━━━━━━\n"
-    await message.answer(text)
+    await message.answer(text, parse_mode="HTML")
 
 @dp.message(F.text == "📊 Статистика")
 async def stats_admin(message: types.Message):
@@ -598,7 +522,8 @@ async def stats_admin(message: types.Message):
         f"📊 <b>СТАТИСТИКА</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"👥 Пользователей: {total}\n"
         f"🚫 Забанено: {banned}\n"
-        f"💡 Идей: {ideas}"
+        f"💡 Идей: {ideas}",
+        parse_mode="HTML"
     )
 
 @dp.message(F.text == "🚫 Забанить")
@@ -606,15 +531,11 @@ async def ban_start(message: types.Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         return
     await state.set_state(BanState.waiting_for_user_id)
-    await message.answer("🚫 Введите ID пользователя для бана:\n\n/cancel - отмена")
+    await message.answer("🚫 Введите ID пользователя для бана:")
 
 @dp.message(BanState.waiting_for_user_id)
 async def ban_get_id(message: types.Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
-        return
-    if message.text == "/cancel":
-        await state.clear()
-        await message.answer("❌ Отменено", reply_markup=admin_menu())
         return
     try:
         uid = int(message.text)
@@ -622,7 +543,7 @@ async def ban_get_id(message: types.Message, state: FSMContext):
         await state.set_state(BanState.waiting_for_reason)
         await message.answer("📝 Введите причину бана:")
     except:
-        await message.answer("❌ Неверный ID! Введите число.")
+        await message.answer("❌ Неверный ID!")
 
 @dp.message(BanState.waiting_for_reason)
 async def ban_do(message: types.Message, state: FSMContext):
@@ -636,62 +557,52 @@ async def ban_do(message: types.Message, state: FSMContext):
         await bot.send_message(uid, f"🚫 Вы забанены!\nПричина: {reason}")
     except:
         pass
-    await message.answer(f"✅ Пользователь {uid} ЗАБАНЕН!", reply_markup=admin_menu())
+    await message.answer(f"✅ Пользователь {uid} ЗАБАНЕН!")
     await state.clear()
 
 @dp.message(F.text == "✅ Разбанить")
-async def unban_start(message: types.Message, state: FSMContext):
+async def unban_start(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
-    await state.set_state(UnbanState.waiting_for_user_id)
-    await message.answer("✅ Введите ID пользователя для разбана:\n\n/cancel - отмена")
+    await message.answer("✅ Введите ID пользователя для разбана:")
 
-@dp.message(UnbanState.waiting_for_user_id)
-async def unban_do(message: types.Message, state: FSMContext):
-    if message.from_user.id != ADMIN_ID:
-        return
-    if message.text == "/cancel":
-        await state.clear()
-        await message.answer("❌ Отменено", reply_markup=admin_menu())
-        return
-    try:
-        uid = int(message.text)
-        await unban_user(uid)
+    @dp.message()
+    async def unban_do(msg: types.Message):
+        if msg.from_user.id != ADMIN_ID:
+            return
         try:
-            await bot.send_message(uid, "✅ Вы разблокированы!")
+            uid = int(msg.text)
+            await unban_user(uid)
+            try:
+                await bot.send_message(uid, "✅ Вы разблокированы!")
+            except:
+                pass
+            await msg.answer(f"✅ Пользователь {uid} РАЗБАНЕН!")
+            dp.message.handlers.remove(unban_do)
         except:
-            pass
-        await message.answer(f"✅ Пользователь {uid} РАЗБАНЕН!", reply_markup=admin_menu())
-        await state.clear()
-    except:
-        await message.answer("❌ Неверный ID! Введите число.")
+            await msg.answer("❌ Неверный ID!")
 
 @dp.message(F.text == "📢 Рассылка")
-async def broadcast_start(message: types.Message, state: FSMContext):
+async def broadcast_start(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
-    await state.set_state(BroadcastState.waiting_for_text)
-    await message.answer("📢 Введите текст для рассылки:\n\n/cancel - отмена")
+    await message.answer("📢 Введите текст для рассылки:")
 
-@dp.message(BroadcastState.waiting_for_text)
-async def broadcast_send(message: types.Message, state: FSMContext):
-    if message.from_user.id != ADMIN_ID:
-        return
-    if message.text == "/cancel":
-        await state.clear()
-        await message.answer("❌ Отменено", reply_markup=admin_menu())
-        return
-    users = await get_unbanned_users()
-    success = 0
-    for uid in users:
-        try:
-            await bot.send_message(uid, f"📢 РАССЫЛКА\n\n{message.text}")
-            success += 1
-            await asyncio.sleep(0.05)
-        except:
-            pass
-    await message.answer(f"✅ Отправлено: {success} пользователям", reply_markup=admin_menu())
-    await state.clear()
+    @dp.message()
+    async def broadcast_send(msg: types.Message):
+        if msg.from_user.id != ADMIN_ID:
+            return
+        users = await get_unbanned_users()
+        success = 0
+        for uid in users:
+            try:
+                await bot.send_message(uid, f"📢 РАССЫЛКА\n\n{msg.text}")
+                success += 1
+                await asyncio.sleep(0.05)
+            except:
+                pass
+        await msg.answer(f"✅ Отправлено: {success} пользователям")
+        dp.message.handlers.remove(broadcast_send)
 
 @dp.message(F.text == "💡 Идеи")
 async def ideas_admin(message: types.Message):
@@ -704,7 +615,7 @@ async def ideas_admin(message: types.Message):
     text = "💡 <b>ИДЕИ</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
     for idea in ideas:
         text += f"👤 @{idea[1] or 'anon'}\n📝 {idea[2][:100]}\n🕐 {idea[3][:16]}\n━━━━━━━━━━━━━━━━━━━━━\n"
-    await message.answer(text)
+    await message.answer(text, parse_mode="HTML")
 
 @dp.message(F.text == "🔙 Главное меню")
 async def back_admin(message: types.Message):
@@ -747,13 +658,13 @@ async def main():
     print(f"🔐 ADMIN_ID = {ADMIN_ID}")
     await init_db()
     print("✅ База данных готова")
-
+    
     scheduler.add_job(update_rates_job, 'interval', hours=1)
     scheduler.add_job(send_morning, 'cron', hour=9, minute=0)
     scheduler.add_job(send_evening, 'cron', hour=19, minute=0)
     scheduler.start()
     print("✅ Планировщик запущен")
-
+    
     await bot.delete_webhook(drop_pending_updates=True)
     me = await bot.get_me()
     print(f"✅ Бот @{me.username} запущен!")
